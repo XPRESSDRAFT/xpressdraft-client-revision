@@ -58,11 +58,11 @@ router.post('/magic-link', async (req, res) => {
       `,
     });
 
-    res.json({ message: 'If this email is registered, a login link has been sent.' });
+    console.log('Magic link created for:', user.email, 'Token:', token, 'URL:', loginUrl);res.json({ message: 'If this email is registered, a login link has been sent.' });
   } catch (err) {
-    console.error('Magic link error:', err);
+    console.error('Magic link error:', err.message, err.stack);
     res.status(500).json({ error: 'Failed to send login link' });
-  }
+}
 });
 
 router.post('/verify', async (req, res) => {
