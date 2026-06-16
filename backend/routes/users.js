@@ -1,0 +1,114 @@
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const { supabase } = require('../db');
+const { auth, teamOnly } = require('../middleware/auth');
+
+router.post('/', auth, teamOnly, async (req, res) => {
+  try {
+    const { name, email, sendInvite = false } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
+
+    const { data: existing } = await supabase
+      .from('users').select('id').eq('email', email.toLowerCase().trim()).single();
+    if (existing) return res.status(409).json({ error: 'A user with this email already exists' });
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({ name, email: email.toLowerCase().trim(), role: 'client' })
+      .select().single();
+
+    if (error) throw error;
+
+    if (sendInvite) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await supabase.from('magic_links').insert({
+        email: user.email, token, expires_at: expiresAt.toISOString()
+      });
+
+      const loginUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
+      const transporter = nodemailer.createTransporter({
+        host: process.env.SMTP_HOST, port: process.env.SMTP_PORT || 587,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      });
+
+      await transporter.sendMail({
+        from: `"Xpress Draft" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: 'Your plans are ready — Xpress Draft',
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+            <h2 style="color:#2A2B29;">Your plans are ready to review</h2>
+            <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:32px">
+              Hi ${name},<br/><br/>
+              Your drawings are ready for review on the Xpress Draft client portal.
+              Click below to access your plans. This link is valid for 48 hours.
+            </p>
+            <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+              Review my plans →
+            </a>
+            <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
+              Questions? Contact us at info@xpressdraft.com.au
+            </p>
+          </div>
+        `
+      });
+    }
+
+    res.status(201).json({ user });
+  } catch (err) {
+    console.error('Create user error:', err);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+router.get('/', auth, teamOnly, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users').select('id, name, email, role, created_at')
+      .eq('role', 'client').order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ users: data });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+router.post('/:id/invite', auth, teamOnly, async (req, res) => {
+  try {
+    const { data: user } = await supabase
+      .from('users').select('*').eq('id', req.params.id).single();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await supabase.from('magic_links').insert({
+      email: user.email, token, expires_at: expiresAt.toISOString()
+    });
+
+    const loginUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
+    const transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST, port: process.env.SMTP_PORT || 587,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    });
+
+    await transporter.sendMail({
+      from: `"Xpress Draft" <${process.env.SMTP_USER}>`,
+      to: user.email,
+      subject: 'Access your Xpress Draft plans',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Access your plans</h2>
+        <p style="color:#5E635B;line-height:1.6;">Hi ${user.name}, here is your updated access link.</p>
+        <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Review my plans →</a>
+      </div>`
+    });
+
+    res.json({ message: 'Invite sent' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to resend invite' });
+  }
+});
+
+module.exports = router;
