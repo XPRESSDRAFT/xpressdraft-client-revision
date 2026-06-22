@@ -419,8 +419,6 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
     setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft (AI)",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));
     setInterpreting(null);
   };
-    
-  const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
 
   const confirmRevision=async(commentId)=>{
     try{
