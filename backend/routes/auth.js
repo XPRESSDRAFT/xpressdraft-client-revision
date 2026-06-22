@@ -53,4 +53,65 @@ router.post('/magic-link', async (req, res) => {
             Access my plans →
           </a>
           <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
-            If you didn't request
+            If you didn't request this, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    if (emailError) {
+      console.error('Resend error:', emailError);
+      return res.status(500).json({ error: 'Failed to send login link' });
+    }
+
+    console.log('Email sent successfully:', emailData);
+    res.json({ message: 'If this email is registered, a login link has been sent.' });
+  } catch (err) {
+    console.error('Magic link error:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to send login link' });
+  }
+});
+
+router.post('/verify', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+
+    const { data: link, error } = await supabase
+      .from('magic_links')
+      .select('*')
+      .eq('token', token)
+      .eq('used', false)
+      .single();
+
+    if (error || !link) return res.status(400).json({ error: 'Invalid or expired link' });
+    if (new Date(link.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'This link has expired. Please request a new one.' });
+    }
+
+    await supabase.from('magic_links').update({ used: true }).eq('id', link.id);
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', link.email)
+      .single();
+
+    const jwtToken = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    console.error('Verify error:', err);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+router.get('/me', auth, async (req, res) => {
+  res.json({ user: { id: req.user.id, name: req.user.name, email: req.user.email, role: req.user.role } });
+});
+
+module.exports = router;
