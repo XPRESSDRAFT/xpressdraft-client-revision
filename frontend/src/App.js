@@ -418,27 +418,8 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
     const d=await api.interpretMarkup(drawing.id,commentId,c?.text);
     setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft (AI)",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));
     setInterpreting(null);
-  };const onMouseDown=e=>{
-    if(tool==="comment"){const r=markupRef.current.getBoundingClientRect();setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});return;}
-    if(tool==="select")return;
-    drawingRef.current=true;const{x,y}=getXY(e);startXY.current={x,y};curPath.current=[{x,y}];
-    if(tool==="text"){const t=prompt("Enter note:");if(t){const p={tool:"textlabel",color,width:strokeW,pts:[{x,y}],text:t,id:Date.now()};const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}drawingRef.current=false;}
   };
-  const onMouseMove=e=>{
-    if(!drawingRef.current)return;const{x,y}=getXY(e);const ctx=markupRef.current.getContext("2d");
-    if(tool==="pen"||tool==="hl"){curPath.current.push({x,y});ctx.save();if(tool==="hl")ctx.globalAlpha=0.28;ctx.strokeStyle=color;ctx.lineWidth=tool==="hl"?strokeW*5:strokeW;ctx.lineCap="round";ctx.lineJoin="round";const pts=curPath.current;ctx.beginPath();ctx.moveTo(pts[pts.length-2].x,pts[pts.length-2].y);ctx.lineTo(x,y);ctx.stroke();ctx.restore();}
-    else if(tool==="erase"){ctx.clearRect(x-12,y-12,24,24);}
-    else{redraw();ctx.save();ctx.strokeStyle=color;ctx.lineWidth=strokeW;ctx.lineCap="round";if(tool==="arrow")drawArrow(ctx,startXY.current.x,startXY.current.y,x,y,color,strokeW);else if(tool==="cloud")drawCloud(ctx,startXY.current.x,startXY.current.y,x,y,color,strokeW);else if(tool==="rect")ctx.strokeRect(startXY.current.x,startXY.current.y,x-startXY.current.x,y-startXY.current.y);ctx.restore();}
-  };
-  const onMouseUp=e=>{
-    if(!drawingRef.current)return;drawingRef.current=false;const{x,y}=getXY(e);let p;
-    if(tool==="pen"||tool==="hl")p={tool,color,width:tool==="hl"?strokeW*5:strokeW,pts:[...curPath.current],id:Date.now()};
-    else if(tool==="arrow")p={tool:"arrow",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    else if(tool==="cloud")p={tool:"cloud",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    else if(tool==="rect")p={tool:"rect",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}
-    curPath.current=[];
-  };
+    
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
 
   const confirmRevision=async(commentId)=>{
