@@ -42,8 +42,7 @@ function LoginPage({onLogin}){
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.black,fontFamily:"Manrope,sans-serif"}}>
       <div style={{background:B.white,borderRadius:12,padding:"2.5rem",width:380}}>
-        <XPDLogo size={48}/>
-        <div style={{fontWeight:600,fontSize:20,color:B.black,marginTop:12}}><span style={{color:B.orange}}>Xpress</span> Draft</div>
+       <XPDLogo size={48}/>
         <div style={{fontSize:13,color:B.black2,marginBottom:28,marginTop:4}}>Plan Review Portal</div>
         {sent?(
           <div style={{padding:16,background:"#EAF3DE",borderRadius:8,color:"#2E5C10",fontSize:14,lineHeight:1.6}}>
@@ -125,8 +124,7 @@ function ProjectsPage({user,onLogout}){
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52}}>
-        <XPDLogo size={30}/>
-        <span style={{fontWeight:600,fontSize:15,color:B.cream,marginLeft:10}}><span style={{color:B.orange}}>Xpress</span> Draft</span>
+       <XPDLogo size={36}/>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="team"?B.orange:"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
@@ -583,7 +581,7 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
 }
 
 function XPDLogo({size=40}){
-  return <img src="/%5BXPD%5DLogo_RGB_Lockup_Combo.png" alt="Xpress Draft" style={{height:size,width:"auto"}}/>;
+  return <img src="/%5BXPD%5DLogo_RGB_Lockup_Combo.png" alt="Xpress Draft" style={{height:size,width:"auto",maxWidth:size*5}}/>;
 }
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
 const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:`1px solid ${B.tone1}`,borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",display:"inline-flex",alignItems:"center",gap:5};
