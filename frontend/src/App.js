@@ -583,7 +583,7 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
 }
 
 function XPDLogo({size=40}){
-  return <img src="/logo.png" alt="Xpress Draft" style={{height:size,width:"auto"}}/>;
+  return <img src="/%5BXPD%5DLogo_RGB_Lockup_Combo.png" alt="Xpress Draft" style={{height:size,width:"auto"}}/>;
 }
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
 const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:`1px solid ${B.tone1}`,borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",display:"inline-flex",alignItems:"center",gap:5};
