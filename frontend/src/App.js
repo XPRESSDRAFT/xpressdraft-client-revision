@@ -568,7 +568,7 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
                 </div>
               ))}
             </div>
-            <button onClick={addComment} style={{...btnPrimary,width:"100%"}}>+ Add comment</button>
+            <button onClick={addComment} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"10px"}}>✓ Done</button>
           </div>
         </div>
       </div>
