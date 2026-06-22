@@ -124,7 +124,8 @@ function ProjectsPage({user,onLogout}){
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52}}>
-       <XPDLogo size={36}/>
+      <XPDLogo size={32}/>
+<span style={{fontWeight:600,fontSize:15,color:B.cream,marginLeft:8}}><span style={{color:B.orange}}>Xpress</span> Draft</span>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="team"?B.orange:"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
@@ -580,10 +581,9 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
   );
 }
 
-function XPDLogo({size=40, variant="color"}){
-  if(variant==="white"){
-    return <img src="/_XPD_Logo_RGB_Logomark_White.png" alt="Xpress Draft" style={{height:size,width:"auto"}}/>;
-  }
+function XPDLogo({size=40}){
+  return <img src="/_XPD_Logo_RGB_Logomark_Combo.png" alt="Xpress Draft" style={{height:size,width:size,objectFit:"contain"}}/>;
+}
   return(
     <svg width={size} height={size} viewBox="0 0 188.38 188.38" xmlns="http://www.w3.org/2000/svg">
       <path fill="#2A2B29" d="M45.3900894,6.5357449v29.6950724c0,1.9266348,1.1070496,3.6796433,2.8435971,4.5112992l42.9460576,23.9518135c1.9052433.9101066,4.1193342.9101066,6.0245775,0l42.9460534-23.9518135c1.7390252-.8291906,2.8435971-2.5846644,2.8435971-4.5112992V6.5357449c0-4.7987211-5.0077647-7.9582641-9.3383015-5.8891181l-36.4535504,17.4059971c-1.905235.9098576-4.1193258.9098576-6.0245692,0L54.7286713.6442486c-4.3308131-2.0667678-9.338582,1.0903999-9.338582,5.8914963Z"/>
