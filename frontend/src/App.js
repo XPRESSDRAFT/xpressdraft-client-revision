@@ -465,12 +465,12 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
               onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;}}/>
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
-              <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"all"}}>
+              <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {comments.filter(c=>c.pin_x!=null).map((c,i)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
                   const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
                   return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
-                    style={{position:"absolute",left:c.pin_x*w,top:c.pin_y*h,transform:`translate(-50%,-50%) scale(${selectedCid===c.id?1.3:1})`,
+                   style={{position:"absolute",left:c.pin_x*w,top:c.pin_y*h,transform:`translate(-50%,-50%) scale(${selectedCid===c.id?1.3:1})`,pointerEvents:"all",
                       width:22,height:22,borderRadius:"50%",background:ct.dot,border:"2px solid white",
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",
                       cursor:"pointer",zIndex:10,transition:"transform 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>{i+1}</div>;
