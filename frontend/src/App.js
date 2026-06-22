@@ -569,7 +569,7 @@ function DrawingView({drawing,user,project,onRevisionConfirmed}){
               ))}
             </div>
             <button onClick={addComment} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"10px"}}>✓ Done</button>
-              {comments.length>0&&user.role==="client"&&<button onClick={()=>{if(window.confirm("Submit all your comments and markup to the Xpress Draft team?"))alert("Your comments have been submitted. The team will review and respond shortly.");}} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:15,padding:"12px",marginTop:8,background:B.black}}>Submit all changes →</button>}
+              {comments.length>0&&<button onClick={()=>{if(window.confirm("Submit all your comments and markup to the Xpress Draft team?"))alert("Your comments have been submitted. The team will review and respond shortly.");}} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:15,padding:"12px",marginTop:8,background:B.black}}>Submit all changes →</button>}
           </div>
         </div>
       </div>
