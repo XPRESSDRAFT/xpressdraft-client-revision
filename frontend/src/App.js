@@ -412,9 +412,6 @@ function ProjectDetail({project,user,onBack}){
   );
 }
 
-);
-}
-
 function XPDLogo({size=40, variant="color"}){
   const url = variant==="white"
     ? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD_Logo_RGB_Logomark_White.png"
