@@ -48,7 +48,6 @@ function LoginPage({onLogin}){
           <XPDLogo size={64}/>
         </div>
         <div style={{fontWeight:600,fontSize:20,color:B.black,textAlign:"center",marginBottom:4}}>
-          <span style={{color:B.orange}}>Xpress</span> Draft
         </div>
         <div style={{fontSize:13,color:B.black2,marginBottom:28,textAlign:"center"}}>Plan Review Portal</div>
         {sent?(
@@ -144,7 +143,6 @@ function ProjectsPage({user,onLogout}){
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
         <XPDLogo size={32}/>
-        <span style={{fontWeight:600,fontSize:15,color:B.cream,marginLeft:4}}><span style={{color:B.orange}}>Xpress</span> Draft</span>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
