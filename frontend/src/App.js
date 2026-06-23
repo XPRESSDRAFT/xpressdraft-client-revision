@@ -412,7 +412,19 @@ function ProjectDetail({project,user,onBack}){
   );
 }
 
-https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_White.png
+);
+}
+
+function XPDLogo({size=40, variant="color"}){
+  const url = variant==="white"
+    ? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD_Logo_RGB_Logomark_White.png"
+    : "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
+  return <img src={url} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
+}
+
+const inputSt={width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
+const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
+const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:`1px solid ${B.tone1}`,borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",display:"inline-flex",alignItems:"center",gap:5};
 
 const inputSt={width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
