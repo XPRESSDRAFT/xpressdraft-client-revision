@@ -292,8 +292,7 @@ function AdminPage({user,onBack}){
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
-        <XPDLogo size={32}/>
-        <span style={{fontWeight:600,fontSize:15,color:B.cream,marginLeft:4}}><span style={{color:B.orange}}>Xpress</span> Draft</span>
+<XPDLogo size={40}/>
         <span style={{color:B.black2,marginLeft:8}}>· Admin</span>
         <button onClick={onBack} style={{marginLeft:"auto",background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back</button>
       </nav>
