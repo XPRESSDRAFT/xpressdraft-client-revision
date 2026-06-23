@@ -415,7 +415,16 @@ function ProjectDetail({project,user,onBack}){
   );
 }
 
-src="/%5BXPD%5DLogo_RGB_Logomark_Combo.png"
+function XPDLogo({size=40}){
+  return(
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="50,5 65,25 50,23 35,25" fill="#2A2B29"/>
+      <polygon points="95,50 75,65 77,50 75,35" fill="#2A2B29"/>
+      <polygon points="50,95 35,75 50,77 65,75" fill="#2A2B29"/>
+      <polygon points="5,50 25,35 23,50 25,65" fill="#EA672F"/>
+    </svg>
+  );
+}
 
 const inputSt={width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
