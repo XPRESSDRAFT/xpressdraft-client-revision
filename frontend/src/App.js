@@ -415,9 +415,7 @@ function ProjectDetail({project,user,onBack}){
   );
 }
 
-function XPDLogo({size=40}){
-  return <img src="/_XPD_Logo_RGB_Logomark_Combo.png" alt="Xpress Draft" style={{height:size,width:size,objectFit:"contain"}}/>;
-}
+src="/%5BXPD%5DLogo_RGB_Logomark_Combo.png"
 
 const inputSt={width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
