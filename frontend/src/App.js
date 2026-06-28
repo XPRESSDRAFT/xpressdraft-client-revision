@@ -290,7 +290,7 @@ function AdminPage({user,onBack}){
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
-<XPDLogo size={40}/>
+<XPDLogo size={40} variant="white"/>
         <span style={{color:B.black2,marginLeft:8}}>· Admin</span>
         <button onClick={onBack} style={{marginLeft:"auto",background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back</button>
       </nav>
@@ -414,7 +414,7 @@ function ProjectDetail({project,user,onBack}){
 
 function XPDLogo({size=40, variant="color"}){
   const url = variant==="white"
-? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_White.png"
+XPD%20Logo_RGB_Lockup_White.png
     : "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
   return <img src={url} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
