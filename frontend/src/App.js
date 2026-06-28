@@ -141,7 +141,7 @@ function ProjectsPage({user,onLogout}){
 
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
-      <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
+      <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
         <XPDLogo size={32}/>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
@@ -202,7 +202,7 @@ function ProjectsPage({user,onLogout}){
                 <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
                   <div style={{flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                      {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:B.black,color:B.cream,fontWeight:600}}>{p.job_number}</span>}
+                      {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444444",color:B.cream,fontWeight:600}}>{p.job_number}</span>}
                       <span style={{fontWeight:600,fontSize:15,color:B.black}}>{p.site_address||p.name}</span>
                       <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:`1px solid ${B.tone1}`,fontWeight:500}}>
                         {rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}
@@ -289,7 +289,7 @@ function AdminPage({user,onBack}){
 
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
-      <nav style={{background:B.black,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
+      <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
 <XPDLogo size={40}/>
         <span style={{color:B.black2,marginLeft:8}}>· Admin</span>
         <button onClick={onBack} style={{marginLeft:"auto",background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back</button>
@@ -370,7 +370,7 @@ function ProjectDetail({project,user,onBack}){
 
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
-      <nav style={{background:B.black,padding:"0 20px",display:"flex",alignItems:"center",height:52,gap:12}}>
+      <nav style={{background:"#444444",padding:"0 20px",display:"flex",alignItems:"center",height:52,gap:12}}>
         <button onClick={onBack} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Projects</button>
         <span style={{color:B.black2}}>|</span>
         <span style={{fontWeight:600,fontSize:14,color:B.cream}}>
