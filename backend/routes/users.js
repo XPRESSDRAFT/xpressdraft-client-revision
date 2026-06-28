@@ -111,4 +111,16 @@ router.post('/:id/invite', auth, teamOnly, async (req, res) => {
   }
 });
 
+router.delete('/:id', auth, teamOnly, async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('users').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 module.exports = router;
