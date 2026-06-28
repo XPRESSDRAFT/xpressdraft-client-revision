@@ -100,4 +100,27 @@ router.post('/:id/invite', auth, teamOnly, async (req, res) => {
         <h2 style="color:#2A2B29;">Access your plans</h2>
         <p style="color:#5E635B;line-height:1.6;">Hi ${user.name}, here is your updated access link.</p>
         <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Review my plans →</a>
-        <p style="color:#A9A09B;font-size:13px;marg
+        <p style="color:#A9A09B;font-size:13px;margin-top:32px;">This link expires in 48 hours.</p>
+      </div>`
+    );
+
+    res.json({ message: 'Invite sent' });
+  } catch (err) {
+    console.error('Resend invite error:', err);
+    res.status(500).json({ error: err.message || 'Failed to resend invite' });
+  }
+});
+
+router.delete('/:id', auth, teamOnly, async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('users').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+module.exports = router;
