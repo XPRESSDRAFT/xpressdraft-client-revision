@@ -23,7 +23,7 @@ const auth = async (req, res, next) => {
 };
 
 const teamOnly = (req, res, next) => {
-  if (req.user.role !== 'team') {
+  if (req.user.role !== 'team' && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Team access only' });
   }
   next();
