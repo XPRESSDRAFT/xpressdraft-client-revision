@@ -414,7 +414,7 @@ function ProjectDetail({project,user,onBack}){
 
 function XPDLogo({size=40, variant="color"}){
   const url = variant==="white"
-    ? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD_Logo_RGB_Logomark_White.png"
+? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_White.png"
     : "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
   return <img src={url} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
