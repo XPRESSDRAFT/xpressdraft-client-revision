@@ -42,7 +42,7 @@ function LoginPage({onLogin}){
     setLoading(false);
   };
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.black,fontFamily:"Manrope,sans-serif"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#444444",fontFamily:"Manrope,sans-serif"}}>
       <div style={{background:B.white,borderRadius:12,padding:"2.5rem",width:380}}>
         <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
           <XPDLogo size={64}/>
