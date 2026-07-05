@@ -97,7 +97,13 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
 
   const onMouseDown=e=>{
-    if(tool==="comment"){const r=markupRef.current.getBoundingClientRect();setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});return;}
+    if(tool==="comment"){
+      const r=markupRef.current.getBoundingClientRect();
+      const fx=(e.clientX-r.left)/markupRef.current.width;
+      const fy=(e.clientY-r.top)/markupRef.current.height;
+      setPendingPin({fx,fy});
+      return;
+    }
     if(tool==="select")return;
     drawingRef.current=true;const{x,y}=getXY(e);startXY.current={x,y};curPath.current=[{x,y}];
     if(tool==="text"){const t=prompt("Enter note:");if(t){const p={tool:"textlabel",color,width:strokeW,pts:[{x,y}],text:t,id:Date.now()};const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}drawingRef.current=false;}
@@ -123,8 +129,12 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
     const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy});
-    setComments([...comments,d.comment]);setNewComment("");setPendingPin(null);
-    setSelectedCid(d.comment.id);setReplyTarget(d.comment.id);
+    setComments(prev=>[...prev,d.comment]);
+    setNewComment("");
+    setPendingPin(null);
+    setSelectedCid(d.comment.id);
+    setReplyTarget(d.comment.id);
+    setTool("comment");
   };
 
   const sendReply=async()=>{
@@ -210,10 +220,10 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={handleSave} style={{...btnPrimary,marginLeft:"auto"}}>{saving?"Saving…":"💾 Save"}</button>
       </div>
 
-      {tool==="comment"&&<div style={{background:"#FEF3E8",borderBottom:`1px solid ${B.tone1}`,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click on the drawing to place a comment pin.</div>}
+      {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:`1px solid ${B.tone1}`,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
       {pendingPin&&<div style={{background:"#FEF3E8",borderBottom:`1px solid ${B.orange}`,padding:"5px 16px",fontSize:12,color:B.black1,fontFamily:"Manrope,sans-serif",display:"flex",alignItems:"center",gap:12}}>
-        <span>📍 Pin placed — write your comment below then click <strong>Done</strong>.</span>
-        <button onClick={()=>setPendingPin(null)} style={{marginLeft:"auto",padding:"3px 10px",background:"none",border:`1px solid ${B.orange}`,borderRadius:5,color:B.orange,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>✕ Cancel</button>
+        <span>📍 Pin placed — write your comment in the sidebar then click <strong>Done</strong>.</span>
+        <button onClick={()=>setPendingPin(null)} style={{marginLeft:"auto",padding:"3px 10px",background:"none",border:`1px solid ${B.orange}`,borderRadius:5,color:B.orange,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>✕ Cancel pin</button>
       </div>}
 
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
@@ -319,7 +329,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
           </div>
 
           <div style={{padding:10,borderTop:`1px solid ${B.tone1}`}}>
-            {pendingPin&&<div style={{fontSize:11,color:B.orange,marginBottom:6}}>📍 Pin placed — write comment below</div>}
+            {pendingPin&&<div style={{fontSize:11,color:B.orange,marginBottom:6}}>📍 Pin placed — write your comment below</div>}
             <textarea value={newComment} onChange={e=>setNewComment(e.target.value)} rows={2}
               placeholder="Add a comment…"
               style={{width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"7px 9px",fontSize:12,fontFamily:"Manrope,sans-serif",resize:"none",boxSizing:"border-box"}}/>
@@ -331,6 +341,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
                 </div>
               ))}
             </div>
+            <button onClick={addComment} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"10px",marginBottom:8}}>✓ Done</button>
             {comments.filter(c=>c.status!=="confirmed").length>0&&(
               <button onClick={submitAllChanges} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",background:B.black}}>
                 Submit all changes →
