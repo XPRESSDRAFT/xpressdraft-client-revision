@@ -142,7 +142,7 @@ function ProjectsPage({user,onLogout}){
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
-        <XPDLogo size={32}/>
+  <XPDLogo size={32} variant="white"/>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:`1px solid ${B.black2}`,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
@@ -413,10 +413,9 @@ function ProjectDetail({project,user,onBack}){
 }
 
 function XPDLogo({size=40, variant="color"}){
-  const url = variant==="white"
-? "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD Logo_RGB_Lockup_White.png"
-    : "https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
-  return <img src={url} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
+  const white="https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_White.png";
+  const color="https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
+  return <img src={variant==="white"?white:color} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
 
 const inputSt={width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
