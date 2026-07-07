@@ -194,6 +194,67 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setAllMarkups(prev=>({...prev,[page]:markups}));
     setSaving(false);
   };
+  const handleExportPDF=async()=>{
+    if(!pdfDoc){alert("No drawing loaded.");return;}
+    const script=document.createElement("script");
+    script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    document.head.appendChild(script);
+    await new Promise(r=>script.onload=r);
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:"landscape"});
+    let firstPage=true;
+    for(let p=1;p<=totalPages;p++){
+      const pg=await pdfDoc.getPage(p);
+      const vp=pg.getViewport({scale:2});
+      const c=document.createElement("canvas");
+      c.width=vp.width;c.height=vp.height;
+      await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+      const ctx=c.getContext("2d");
+      const pagePaths=allMarkups[p]||[];
+      pagePaths.forEach(path=>{
+        ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*2;ctx.lineCap="round";ctx.lineJoin="round";
+        if(path.tool==="hl")ctx.globalAlpha=0.28;
+        if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";ctx.fillText(path.text,path.pts[0].x*2,path.pts[0].y*2);}
+        else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*2,path.pts[0].y*2,(path.pts[1].x-path.pts[0].x)*2,(path.pts[1].y-path.pts[0].y)*2);}
+        else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*2,pt.y*2):ctx.moveTo(pt.x*2,pt.y*2));ctx.stroke();}
+        ctx.restore();
+      });
+      const pageComments=comments.filter(cc=>cc.pin_x!=null&&(cc.page||1)===p);
+      pageComments.forEach((cc,i)=>{
+        const x=cc.pin_x*vp.width;const y=cc.pin_y*vp.height;
+        ctx.beginPath();ctx.arc(x,y,16,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();
+        ctx.fillStyle="#fff";ctx.font="bold 16px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+        ctx.fillText(i+1,x,y);
+      });
+      const imgData=c.toDataURL("image/jpeg",0.85);
+      const pw=pdf.internal.pageSize.getWidth();
+      const ph=pdf.internal.pageSize.getHeight();
+      const ratio=Math.min(pw/vp.width,ph/vp.height);
+      if(!firstPage)pdf.addPage();
+      pdf.addImage(imgData,"JPEG",0,0,vp.width*ratio,vp.height*ratio);
+      firstPage=false;
+    }
+    pdf.addPage();
+    const pw=pdf.internal.pageSize.getWidth();
+    pdf.setFontSize(18);pdf.setTextColor(42,43,41);
+    pdf.text("Comment Summary",14,20);
+    pdf.setFontSize(11);pdf.setTextColor(94,99,91);
+    const proj=[project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name;
+    pdf.text(proj,14,30);
+    pdf.text("Exported: "+new Date().toLocaleDateString("en-AU"),14,37);
+    let y=50;
+    const allComments=comments.filter(c=>c.pin_x!=null);
+    allComments.forEach((cc,i)=>{
+      if(y>180){pdf.addPage();y=20;}
+      pdf.setFontSize(11);pdf.setTextColor(226,75,74);
+      pdf.text("Pin "+(i+1)+" - "+(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1)+" (Page "+(cc.page||1)+")",14,y);
+      pdf.setTextColor(42,43,41);pdf.setFontSize(10);
+      const lines=pdf.splitTextToSize(cc.text,pw-28);
+      pdf.text(lines,14,y+6);
+      y+=6+(lines.length*5)+8;
+    });
+    pdf.save((project.job_number||"drawing")+"-markup.pdf");
+  };
 
   const submitAllChanges=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
@@ -237,7 +298,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;redraw();}} style={btnGhost}>↩</button>
         <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];redraw();}} style={btnGhost}>🗑</button>
         {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
-        <button onClick={handleSave} style={{...btnPrimary,marginLeft:"auto"}}>{saving?"Saving...":"Save"}</button>
+  <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
+          <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>📄 Export PDF</button>
+<button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>Export PDF</button>
       </div>
 
       {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.tone1,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
