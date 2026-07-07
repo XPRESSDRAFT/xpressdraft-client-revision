@@ -230,7 +230,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
           </button>
         ))}
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        {COLORS.map(c=><div key={c} onClick={()=>setColor(c)} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?'2.5px solid ${B.black}':"1.5px solid transparent"}}/>)}
+{COLORS.map(c=><div key={c} onClick={()=>setColor(c)} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?"2.5px solid "+B.black:"1.5px solid transparent"}}/>)}
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div
