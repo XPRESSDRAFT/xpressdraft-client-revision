@@ -95,9 +95,9 @@ export const confirmRevision = (drawingId, commentId) =>
 export const getMarkups = (drawingId) =>
   fetch(`${API}/api/drawings/${drawingId}/markups`, { headers: headers() }).then(handle);
 
-export const saveMarkups = (drawingId, paths, page = 1) =>
+export const saveMarkups = (drawingId, paths, page = 1, canvasWidth = 0, canvasHeight = 0) =>
   fetch(`${API}/api/drawings/${drawingId}/markups`, {
-    method: 'PUT', headers: headers(), body: JSON.stringify({ paths, page })
+    method: 'PUT', headers: headers(), body: JSON.stringify({ paths, page, canvasWidth, canvasHeight })
   }).then(handle);
 
 export const incrementMarkupExport = (projectId, num) =>
