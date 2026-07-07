@@ -15,8 +15,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const markupRef=useRef();
   const wrapRef=useRef();
   const [comments,setComments]=useState([]);
- const [markups,setMarkups]=useState([]);
-const [allMarkups,setAllMarkups]=useState({});
+  const [markups,setMarkups]=useState([]);
+  const [allMarkups,setAllMarkups]=useState({});
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState("#EA672F");
   const [strokeW,setStrokeW]=useState(2);
@@ -40,8 +40,7 @@ const [allMarkups,setAllMarkups]=useState({});
 
   const isTeam=user.role==="team"||user.role==="admin";
 
- useEffect(()=>{
-useEffect(()=>{
+  useEffect(()=>{
     api.getComments(drawing.id).then(d=>setComments(d.comments));
     api.getMarkups(drawing.id).then(d=>{
       const byPage={};
@@ -54,20 +53,14 @@ useEffect(()=>{
   },[drawing.id]);
 
   useEffect(()=>{
-    const paths=allMarkups[page]||[];
-    pathsRef.current=paths;
-    setMarkups(paths);
-    redraw();
-  },[page,allMarkups]);
+    if(pdfReady)return;
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";setPdfReady(true);};
     document.head.appendChild(s);
   },[]);
 
   useEffect(()=>{
-  const paths=allMarkups[page]||[];
-  pathsRef.current=paths;
-  setMarkups(paths);
-  redraw();
-},[page,allMarkups]);
     if(!pdfReady||!drawing.file_url)return;
     window.pdfjsLib.getDocument({url:drawing.file_url}).promise
       .then(doc=>{setPdfDoc(doc);setTotalPages(doc.numPages);})
@@ -75,11 +68,6 @@ useEffect(()=>{
   },[pdfReady,drawing.file_url]);
 
   useEffect(()=>{
-  const paths=allMarkups[page]||[];
-  pathsRef.current=paths;
-  setMarkups(paths);
-  redraw();
-},[page,allMarkups]);
     if(!pdfDoc)return;
     pdfDoc.getPage(page).then(pg=>{
       const wrap=wrapRef.current;if(!wrap)return;
@@ -92,12 +80,14 @@ useEffect(()=>{
     });
   },[pdfDoc,page]);
 
+  useEffect(()=>{pathsRef.current=markups;},[markups]);
+
   useEffect(()=>{
-  const paths=allMarkups[page]||[];
-  pathsRef.current=paths;
-  setMarkups(paths);
-  redraw();
-},[page,allMarkups]);(()=>{pathsRef.current=markups;},[markups]);
+    const paths=allMarkups[page]||[];
+    pathsRef.current=paths;
+    setMarkups(paths);
+    redraw();
+  },[page,allMarkups]);
 
   const redraw=useCallback(()=>{
     const c=markupRef.current;if(!c)return;
@@ -151,9 +141,9 @@ useEffect(()=>{
     curPath.current=[];
   };
 
-const addComment=async()=>{
+  const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
-    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
+    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy});
     setComments(prev=>[...prev,d.comment]);
     setNewComment("");
     setPendingPin(null);
@@ -198,12 +188,12 @@ const addComment=async()=>{
     }catch(e){alert("❌ "+e.message);}
   };
 
-const handleSave=async()=>{
-  setSaving(true);
-  await api.saveMarkups(drawing.id,markups,page);
-  setAllMarkups(prev=>({...prev,[page]:markups}));
-  setSaving(false);
-};
+  const handleSave=async()=>{
+    setSaving(true);
+    await api.saveMarkups(drawing.id,markups,page);
+    setAllMarkups(prev=>({...prev,[page]:markups}));
+    setSaving(false);
+  };
 
   const submitAllChanges=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
@@ -233,7 +223,7 @@ const handleSave=async()=>{
   return(
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{background:B.white,borderBottom:`1px solid ${B.tone1}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        {[["select","ESC","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
+        {[["select","↖","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
             style={{padding:"5px 8px",border:`1px solid ${tool===id?B.orange:B.tone1}`,borderRadius:6,background:tool===id?"#FEF3E8":B.white,color:tool===id?B.orange:B.black1,cursor:"pointer",fontSize:14,fontFamily:"Manrope,sans-serif",fontWeight:tool===id?600:400}}>
             {ic}
@@ -265,7 +255,7 @@ const handleSave=async()=>{
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*(markupRef.current?.width||1),top:pendingPin.fy*(markupRef.current?.height||1),transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>📍</div>}
-               {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c,i)=>{
+                {comments.filter(c=>c.pin_x!=null).map((c,i)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
                   const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
                   return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
@@ -281,11 +271,11 @@ const handleSave=async()=>{
 
         <div style={{width:280,background:B.white,borderLeft:`1px solid ${B.tone1}`,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,borderBottom:`1px solid ${B.tone1}`,letterSpacing:"0.05em"}}>
-            {comments.filter(c=>(c.page||1)===page).length} COMMENT{comments.length!==1?"S":""}
+            {comments.length} COMMENT{comments.length!==1?"S":""}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:10}}>
             {comments.length===0&&<div style={{textAlign:"center",padding:"2rem 0",color:B.black2,fontSize:13,lineHeight:1.6}}>No comments yet.<br/>Use the 📍 pin tool to anchor comments.</div>}
-            {comments.filter(c=>(c.page||1)===page).map((c,i)=>{
+            {comments.map((c,i)=>{
               const ct=CTYPES[c.type]||CTYPES.note;
               const isSelected=selectedCid===c.id;
               return(
