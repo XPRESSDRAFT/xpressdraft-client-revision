@@ -436,3 +436,5 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 }
 
 export default DrawingView;
+export const incrementMarkupExport = (projectId, num) =>
+  req(`/api/projects/${projectId}/markup-export`, { method: 'POST', body: JSON.stringify({ exportNum: num }) });
