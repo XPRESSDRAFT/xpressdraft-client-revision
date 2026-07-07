@@ -240,21 +240,22 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   const handleSave=async()=>{
     setSaving(true);
-    await api.saveMarkups(drawing.id,markups,page);
+    const cw=markupRef.current?.width||0;
+    const ch=markupRef.current?.height||0;
+    await api.saveMarkups(drawing.id,markups,page,cw,ch);
     setAllMarkups(prev=>({...prev,[page]:markups}));
+    setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
   };
 
-  const handleExportPDF=async()=>{
-    setShowExportDialog(true);
-  };
+  const handleExportPDF=async()=>{setShowExportDialog(true);};
 
   const doExport=async()=>{
     if(!pdfDoc){alert("No drawing loaded.");return;}
     setExporting(true);setShowExportDialog(false);
-    const script=document.createElement("script");
-    script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
     if(!window.jspdf){
+      const script=document.createElement("script");
+      script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
       document.head.appendChild(script);
       await new Promise(r=>{script.onload=r;});
     }
@@ -335,15 +336,39 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       if(!firstPage)pdf.addPage();
       pdf.addImage(imgData,"JPEG",0,0,vp.width*ratio,vp.height*ratio);
       firstPage=false;
+      const pageCommentList=allPins.filter(cc=>(cc.page||1)===p);
+      if(pageCommentList.length>0){
+        pdf.addPage();const cpw=pdf.internal.pageSize.getWidth();
+        pdf.setFontSize(14);pdf.setTextColor(42,43,41);pdf.text("Comments — Page "+p,40,30);
+        pdf.setDrawColor(210,202,196);pdf.line(40,36,cpw-40,36);
+        let cy=50;
+        pageCommentList.forEach((cc)=>{
+          if(cy>500){pdf.addPage();cy=30;}
+          const globalIdx=allPins.indexOf(cc);
+          pdf.setFontSize(11);pdf.setTextColor(226,75,74);
+          const typeLabel=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
+          pdf.text("Pin "+(globalIdx+1)+" — "+typeLabel,40,cy);
+          pdf.setTextColor(42,43,41);pdf.setFontSize(10);
+          const lines=pdf.splitTextToSize(cc.text,cpw-80);
+          pdf.text(lines,40,cy+13);cy+=13+(lines.length*12)+10;
+          if(cc.replies&&cc.replies.length>0){
+            cc.replies.forEach(r=>{
+              if(cy>500){pdf.addPage();cy=30;}
+              pdf.setTextColor(234,103,47);pdf.setFontSize(9);
+              pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":",52,cy);
+              pdf.setTextColor(66,69,60);const rlines=pdf.splitTextToSize(r.text,cpw-100);
+              pdf.text(rlines,52,cy+10);cy+=10+(rlines.length*11)+6;
+            });
+          }
+          pdf.setDrawColor(242,234,229);pdf.line(40,cy,cpw-40,cy);cy+=8;
+        });
+      }
     }
-    pdf.addPage();
-    const pw=pdf.internal.pageSize.getWidth();
-    pdf.setFontSize(20);pdf.setTextColor(42,43,41);
-    pdf.text("Markup Summary",40,40);
+    pdf.addPage();const pw=pdf.internal.pageSize.getWidth();
+    pdf.setFontSize(20);pdf.setTextColor(42,43,41);pdf.text("Markup Summary",40,40);
     pdf.setFontSize(12);pdf.setTextColor(94,99,91);
     const proj=[project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name;
-    pdf.text(proj,40,58);
-    pdf.text("Exported: "+new Date().toLocaleDateString("en-AU")+" | Markup "+exportNum,40,72);
+    pdf.text(proj,40,58);pdf.text("Exported: "+new Date().toLocaleDateString("en-AU")+" | Markup "+exportNum,40,72);
     pdf.setDrawColor(210,202,196);pdf.line(40,80,pw-40,80);
     let y=96;
     allPins.forEach((cc,i)=>{
@@ -353,8 +378,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       pdf.text("Pin "+(i+1)+" - "+typeLabel+" (Page "+(cc.page||1)+")",40,y);
       pdf.setTextColor(42,43,41);pdf.setFontSize(10);
       const lines=pdf.splitTextToSize(cc.text,pw-80);
-      pdf.text(lines,40,y+14);
-      y+=14+(lines.length*13)+10;
+      pdf.text(lines,40,y+14);y+=14+(lines.length*13)+10;
       pdf.setDrawColor(242,234,229);pdf.line(40,y,pw-40,y);y+=8;
     });
     const jobNum=(project.job_number||"").replace(/\s+/g,"-");
@@ -432,7 +456,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <button onClick={()=>setZoom(1)} style={{...btnGhost,fontSize:11}}>Fit</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
+        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
       </div>
@@ -444,8 +468,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       </div>}
 
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}}
-          onWheel={onWheel}>
+        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}} onWheel={onWheel}>
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
             <canvas ref={canvasRef} style={{display:"block"}}/>
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
@@ -572,5 +595,4 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     </div>
   );
 }
-
 export default DrawingView;
