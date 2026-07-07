@@ -143,7 +143,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
-    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy});
+    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
     setComments(prev=>[...prev,d.comment]);
     setNewComment("");
     setPendingPin(null);
@@ -223,7 +223,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   return(
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{background:B.white,borderBottom:`1px solid ${B.tone1}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        {[["select","↖","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
+        {[["select","ESC","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
             style={{padding:"5px 8px",border:`1px solid ${tool===id?B.orange:B.tone1}`,borderRadius:6,background:tool===id?"#FEF3E8":B.white,color:tool===id?B.orange:B.black1,cursor:"pointer",fontSize:14,fontFamily:"Manrope,sans-serif",fontWeight:tool===id?600:400}}>
             {ic}
@@ -233,145 +233,4 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         {COLORS.map(c=><div key={c} onClick={()=>setColor(c)} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?`2.5px solid ${B.black}`:"1.5px solid transparent"}}/>)}
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
-        <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];redraw();}} style={btnGhost}>🗑</button>
-        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
-        <button onClick={handleSave} style={{...btnPrimary,marginLeft:"auto"}}>{saving?"Saving…":"💾 Save"}</button>
-      </div>
-
-      {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:`1px solid ${B.tone1}`,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
-      {pendingPin&&<div style={{background:"#FEF3E8",borderBottom:`1px solid ${B.orange}`,padding:"5px 16px",fontSize:12,color:B.black1,fontFamily:"Manrope,sans-serif",display:"flex",alignItems:"center",gap:12}}>
-        <span>📍 Pin placed — write your comment in the sidebar then click <strong>Done</strong>.</span>
-        <button onClick={()=>setPendingPin(null)} style={{marginLeft:"auto",padding:"3px 10px",background:"none",border:`1px solid ${B.orange}`,borderRadius:5,color:B.orange,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>✕ Cancel pin</button>
-      </div>}
-
-      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}}>
-          <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
-            <canvas ref={canvasRef} style={{display:"block"}}/>
-            <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
-              onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;}}/>
-            <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
-              <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
-                {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*(markupRef.current?.width||1),top:pendingPin.fy*(markupRef.current?.height||1),transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>📍</div>}
-                {comments.filter(c=>c.pin_x!=null).map((c,i)=>{
-                  const ct=CTYPES[c.type]||CTYPES.note;
-                  const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
-                  return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
-                    style={{position:"absolute",left:c.pin_x*w,top:c.pin_y*h,transform:`translate(-50%,-50%) scale(${selectedCid===c.id?1.3:1})`,
-                      width:22,height:22,borderRadius:"50%",background:ct.dot,border:"2px solid white",
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",
-                      cursor:"pointer",zIndex:10,transition:"transform 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)",pointerEvents:"all"}}>{i+1}</div>;
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{width:280,background:B.white,borderLeft:`1px solid ${B.tone1}`,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
-          <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,borderBottom:`1px solid ${B.tone1}`,letterSpacing:"0.05em"}}>
-            {comments.length} COMMENT{comments.length!==1?"S":""}
-          </div>
-          <div style={{flex:1,overflowY:"auto",padding:10}}>
-            {comments.length===0&&<div style={{textAlign:"center",padding:"2rem 0",color:B.black2,fontSize:13,lineHeight:1.6}}>No comments yet.<br/>Use the 📍 pin tool to anchor comments.</div>}
-            {comments.map((c,i)=>{
-              const ct=CTYPES[c.type]||CTYPES.note;
-              const isSelected=selectedCid===c.id;
-              return(
-                <div key={c.id} style={{marginBottom:10}}>
-                  <div onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
-                    style={{background:isSelected?"#FEF3E8":B.cream,border:`1px solid ${isSelected?B.orange:B.tone1}`,borderRadius:8,padding:"10px 11px",cursor:"pointer",borderLeft:`3px solid ${ct.dot}`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",background:ct.dot,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700}}>{i+1}</div>
-                      <span style={{fontSize:12,fontWeight:600,color:B.black,flex:1}}>{c.author?.name}</span>
-                      <span style={{fontSize:10,color:B.black2}}>{new Date(c.created_at).toLocaleDateString("en-AU",{day:"numeric",month:"short"})}</span>
-                    </div>
-                    <p style={{fontSize:12,color:B.black1,lineHeight:1.55,margin:"0 0 6px"}}>{c.text}</p>
-                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:ct.bg,color:ct.color,fontWeight:500}}>{ct.label}</span>
-                      {c.status==="confirmed"&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#EAF3DE",color:"#2E5C10",fontWeight:500}}>✅ Confirmed</span>}
-                    </div>
-                    {c.author?.id===user?.id&&c.status!=="confirmed"&&<div style={{display:"flex",gap:6,marginTop:6}}>
-                      <button onClick={e=>{e.stopPropagation();const t=prompt("Edit comment:",c.text);if(t&&t.trim())setComments(comments.map(x=>x.id===c.id?{...x,text:t.trim()}:x));}} style={{fontSize:10,padding:"2px 8px",border:`1px solid ${B.tone1}`,borderRadius:4,background:B.white,cursor:"pointer",color:B.black2,fontFamily:"Manrope,sans-serif"}}>✏ Edit</button>
-                      <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete this comment?"))setComments(comments.filter(x=>x.id!==c.id));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid #E24B4A",borderRadius:4,background:B.white,cursor:"pointer",color:"#8B2020",fontFamily:"Manrope,sans-serif"}}>🗑 Delete</button>
-                    </div>}
-                  </div>
-
-                  {(c.replies||[]).map(r=>(
-                    <div key={r.id} style={{marginLeft:12,marginTop:5,padding:"8px 10px",background:r.author?.role==="team"||r.author?.role==="admin"?"#FEF3E8":B.white,border:`1px solid ${r.author?.role==="team"||r.author?.role==="admin"?B.orange:B.tone1}`,borderRadius:7,borderLeft:`3px solid ${r.author?.role==="team"||r.author?.role==="admin"?B.orange:B.tone2}`}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                        <span style={{fontSize:11,fontWeight:600,color:r.author?.role==="team"||r.author?.role==="admin"?B.orange:B.black}}>{r.author?.name}</span>
-                        {r.is_ai_interpreted&&<span style={{fontSize:9,background:B.orange,color:"#fff",borderRadius:4,padding:"1px 5px"}}>AI interpreted</span>}
-                        {(r.author?.role==="team"||r.author?.role==="admin")&&!r.is_ai_interpreted&&<span style={{fontSize:9,background:B.orange,color:"#fff",borderRadius:4,padding:"1px 5px"}}>XD Team</span>}
-                      </div>
-                      <p style={{fontSize:12,color:B.black1,margin:0,lineHeight:1.5}}>{r.text}</p>
-                    </div>
-                  ))}
-
-                  {isSelected&&user.role!=="admin"&&user.role!=="team"&&c.status==="interpreted"&&(
-                    <div style={{marginLeft:12,marginTop:8,padding:12,background:"#FEF3E8",border:`1px solid ${B.orange}`,borderRadius:8}}>
-                      <p style={{fontSize:12,color:B.black1,margin:"0 0 6px",fontWeight:600}}>⚠️ This will use a revision</p>
-                      <p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>
-                        {revisionSummary?.stageLabel==="PR"?"Preliminary":"Working Drawings"} Stage — Revision {(revisionSummary?.used||0)+1} of {revisionSummary?.totalAllowed||2}<br/>
-                        By confirming, these changes will be actioned by the Xpress Draft team.
-                      </p>
-                      <div style={{display:"flex",gap:8}}>
-                        <button onClick={()=>setSelectedCid(null)} style={btnGhost}>Cancel</button>
-                        <button onClick={()=>confirmRevision(c.id)} style={btnPrimary}>✓ Confirm & Send</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {isSelected&&isTeam&&c.status==="open"&&(
-                    <div style={{marginLeft:12,marginTop:6}}>
-                      <button onClick={()=>interpret(c.id)} disabled={interpreting===c.id}
-                        style={{...btnPrimary,width:"100%",justifyContent:"center",marginBottom:6}}>
-                        {interpreting===c.id?"Interpreting…":"🤖 Interpret with AI"}
-                      </button>
-                    </div>
-                  )}
-
-                  {isSelected&&replyTarget===c.id&&c.status!=="confirmed"&&(
-                    <div style={{marginLeft:12,marginTop:6}}>
-                      <textarea value={replyDraft} onChange={e=>setReplyDraft(e.target.value)} rows={2}
-                        placeholder={isTeam?"Type reply — AI can polish it…":"Write a reply…"}
-                        style={{width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"7px 9px",fontSize:12,fontFamily:"Manrope,sans-serif",resize:"none",boxSizing:"border-box"}}/>
-                      <div style={{display:"flex",gap:6,marginTop:5}}>
-                        {isTeam&&<button onClick={improveReply} disabled={improving} style={{...btnGhost,fontSize:11,flex:1}}>{improving?"Improving…":"✨ AI Polish"}</button>}
-                        <button onClick={sendReply} style={{...btnPrimary,fontSize:11,flex:1}}>Send</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{padding:10,borderTop:`1px solid ${B.tone1}`}}>
-            {pendingPin&&<div style={{fontSize:11,color:B.orange,marginBottom:6}}>📍 Pin placed — write your comment below</div>}
-            <textarea value={newComment} onChange={e=>setNewComment(e.target.value)} rows={2}
-              placeholder="Add a comment…"
-              style={{width:"100%",border:`1px solid ${B.tone1}`,borderRadius:7,padding:"7px 9px",fontSize:12,fontFamily:"Manrope,sans-serif",resize:"none",boxSizing:"border-box"}}/>
-            <div style={{display:"flex",gap:4,margin:"6px 0 8px"}}>
-              {Object.entries(CTYPES).map(([k,v])=>(
-                <div key={k} onClick={()=>setCtype(k)}
-                  style={{flex:1,fontSize:10,padding:"3px 2px",border:`1px solid ${ctype===k?B.orange:B.tone1}`,borderRadius:5,cursor:"pointer",textAlign:"center",fontWeight:500,background:ctype===k?"#FEF3E8":B.white,color:ctype===k?B.orange:B.black2}}>
-                  {v.label}
-                </div>
-              ))}
-            </div>
-            <button onClick={addComment} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"10px",marginBottom:8}}>✓ Done</button>
-            {comments.filter(c=>c.status!=="confirmed").length>0&&(
-              <button onClick={submitAllChanges} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",background:B.black}}>
-                Submit all changes →
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default DrawingView;
+        <div
