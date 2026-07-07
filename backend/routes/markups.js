@@ -19,7 +19,7 @@ router.get('/', auth, async (req, res) => {
 
 router.put('/', auth, async (req, res) => {
   try {
-    const { paths, page = 1 } = req.body;
+const { paths, page = 1, canvasWidth = 0, canvasHeight = 0 } = req.body;
     if (!paths) return res.status(400).json({ error: 'Paths required' });
 
     const markupLayer = req.user.role === 'team' ? 'team' : 'client';
