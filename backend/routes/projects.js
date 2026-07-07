@@ -142,4 +142,14 @@ function buildRevisionSummary(stage, revisions) {
   };
 }
 
+router.post('/:id/markup-export', auth, async (req, res) => {
+  try {
+    const { exportNum } = req.body;
+    await supabase.from('projects').update({ markup_export_count: exportNum }).eq('id', req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update export count' });
+  }
+});
+
 module.exports = router;
