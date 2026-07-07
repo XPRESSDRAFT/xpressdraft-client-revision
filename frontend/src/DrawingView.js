@@ -41,28 +41,24 @@ const [allMarkups,setAllMarkups]=useState({});
   const isTeam=user.role==="team"||user.role==="admin";
 
  useEffect(()=>{
-  const paths=allMarkups[page]||[];
-  pathsRef.current=paths;
-  setMarkups(paths);
-  redraw();
-},[page,allMarkups]);
+ useEffect(()=>{
     api.getComments(drawing.id).then(d=>setComments(d.comments));
- api.getMarkups(drawing.id).then(d=>{
-  const byPage={};
-  d.markups.forEach(m=>{byPage[m.page||1]=m.paths||[];});
-  setAllMarkups(byPage);
-  const currentPaths=byPage[1]||[];
-  pathsRef.current=currentPaths;
-  setMarkups(currentPaths);
-  });
-},[drawing.id]);
+    api.getMarkups(drawing.id).then(d=>{
+      const byPage={};
+      d.markups.forEach(m=>{byPage[m.page||1]=m.paths||[];});
+      setAllMarkups(byPage);
+      const currentPaths=byPage[1]||[];
+      pathsRef.current=currentPaths;
+      setMarkups(currentPaths);
+    });
+  },[drawing.id]);
 
   useEffect(()=>{
-  const paths=allMarkups[page]||[];
-  pathsRef.current=paths;
-  setMarkups(paths);
-  redraw();
-},[page,allMarkups]);
+    const paths=allMarkups[page]||[];
+    pathsRef.current=paths;
+    setMarkups(paths);
+    redraw();
+  },[page,allMarkups]);
     if(pdfReady)return;
     const s=document.createElement("script");
     s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
