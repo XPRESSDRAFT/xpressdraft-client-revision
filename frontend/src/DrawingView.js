@@ -126,9 +126,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     curPath.current=[];
   };
 
-  const addComment=async()=>{
+const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
-    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy});
+    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
     setComments(prev=>[...prev,d.comment]);
     setNewComment("");
     setPendingPin(null);
