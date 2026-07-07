@@ -232,9 +232,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     }catch(e){alert("Error: "+e.message);}
   };
 
-  const handleSave=async()=>{
+const handleSave=async()=>{
     setSaving(true);
-    await api.saveMarkups(drawing.id,markups,page);
+    const cw=markupRef.current?.width||0;
+    const ch=markupRef.current?.height||0;
+    await api.saveMarkups(drawing.id,markups,page,cw,ch);
     setAllMarkups(prev=>({...prev,[page]:markups}));
     setSaving(false);
   };
