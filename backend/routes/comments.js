@@ -23,13 +23,13 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, async (req, res) => {
   try {
-    const { text, type, pinX, pinY } = req.body;
+const { text, type, pinX, pinY, page } = req.body;
     if (!text || !type) return res.status(400).json({ error: 'Text and type required' });
 
     const { data, error } = await supabase
       .from('comments')
-      .insert({ drawing_id: req.params.drawingId, author_id: req.user.id,
-        text, type, pin_x: pinX, pin_y: pinY, status: 'open' })
+.insert({ drawing_id: req.params.drawingId, author_id: req.user.id,
+        text, type, pin_x: pinX, pin_y: pinY, status: 'open', page: page||1 })
       .select(`*, author:users(id, name, role)`).single();
 
     if (error) throw error;
