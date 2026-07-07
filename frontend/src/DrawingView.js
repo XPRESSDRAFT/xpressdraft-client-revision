@@ -15,7 +15,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const markupRef=useRef();
   const wrapRef=useRef();
   const [comments,setComments]=useState([]);
-  const [markups,setMarkups]=useState([]);
+ const [markups,setMarkups]=useState([]);
+const [allMarkups,setAllMarkups]=useState({});
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState("#EA672F");
   const [strokeW,setStrokeW]=useState(2);
@@ -39,12 +40,29 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   const isTeam=user.role==="team"||user.role==="admin";
 
-  useEffect(()=>{
+ useEffect(()=>{
+  const paths=allMarkups[page]||[];
+  pathsRef.current=paths;
+  setMarkups(paths);
+  redraw();
+},[page,allMarkups]);
     api.getComments(drawing.id).then(d=>setComments(d.comments));
-    api.getMarkups(drawing.id).then(d=>{if(d.markups.length>0){pathsRef.current=d.markups[0].paths||[];setMarkups(d.markups[0].paths||[]);}});
+ api.getMarkups(drawing.id).then(d=>{
+  const byPage={};
+  d.markups.forEach(m=>{byPage[m.page||1]=m.paths||[];});
+  setAllMarkups(byPage);
+  const currentPaths=byPage[1]||[];
+  pathsRef.current=currentPaths;
+  setMarkups(currentPaths);
+});
   },[drawing.id]);
 
   useEffect(()=>{
+  const paths=allMarkups[page]||[];
+  pathsRef.current=paths;
+  setMarkups(paths);
+  redraw();
+},[page,allMarkups]);
     if(pdfReady)return;
     const s=document.createElement("script");
     s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -53,6 +71,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   },[]);
 
   useEffect(()=>{
+  const paths=allMarkups[page]||[];
+  pathsRef.current=paths;
+  setMarkups(paths);
+  redraw();
+},[page,allMarkups]);
     if(!pdfReady||!drawing.file_url)return;
     window.pdfjsLib.getDocument({url:drawing.file_url}).promise
       .then(doc=>{setPdfDoc(doc);setTotalPages(doc.numPages);})
@@ -60,6 +83,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   },[pdfReady,drawing.file_url]);
 
   useEffect(()=>{
+  const paths=allMarkups[page]||[];
+  pathsRef.current=paths;
+  setMarkups(paths);
+  redraw();
+},[page,allMarkups]);
     if(!pdfDoc)return;
     pdfDoc.getPage(page).then(pg=>{
       const wrap=wrapRef.current;if(!wrap)return;
@@ -72,7 +100,12 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     });
   },[pdfDoc,page]);
 
-  useEffect(()=>{pathsRef.current=markups;},[markups]);
+  useEffect(()=>{
+  const paths=allMarkups[page]||[];
+  pathsRef.current=paths;
+  setMarkups(paths);
+  redraw();
+},[page,allMarkups]);(()=>{pathsRef.current=markups;},[markups]);
 
   const redraw=useCallback(()=>{
     const c=markupRef.current;if(!c)return;
@@ -173,7 +206,12 @@ const addComment=async()=>{
     }catch(e){alert("❌ "+e.message);}
   };
 
-  const handleSave=async()=>{setSaving(true);await api.saveMarkups(drawing.id,markups,page);setSaving(false);};
+const handleSave=async()=>{
+  setSaving(true);
+  await api.saveMarkups(drawing.id,markups,page);
+  setAllMarkups(prev=>({...prev,[page]:markups}));
+  setSaving(false);
+};
 
   const submitAllChanges=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
