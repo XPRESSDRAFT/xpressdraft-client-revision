@@ -235,7 +235,7 @@ const addComment=async()=>{
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*(markupRef.current?.width||1),top:pendingPin.fy*(markupRef.current?.height||1),transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>📍</div>}
-                {comments.filter(c=>c.pin_x!=null).map((c,i)=>{
+               {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c,i)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
                   const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
                   return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
@@ -251,11 +251,11 @@ const addComment=async()=>{
 
         <div style={{width:280,background:B.white,borderLeft:`1px solid ${B.tone1}`,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,borderBottom:`1px solid ${B.tone1}`,letterSpacing:"0.05em"}}>
-            {comments.length} COMMENT{comments.length!==1?"S":""}
+            {comments.filter(c=>(c.page||1)===page).length} COMMENT{comments.length!==1?"S":""}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:10}}>
             {comments.length===0&&<div style={{textAlign:"center",padding:"2rem 0",color:B.black2,fontSize:13,lineHeight:1.6}}>No comments yet.<br/>Use the 📍 pin tool to anchor comments.</div>}
-            {comments.map((c,i)=>{
+            {comments.filter(c=>(c.page||1)===page).map((c,i)=>{
               const ct=CTYPES[c.type]||CTYPES.note;
               const isSelected=selectedCid===c.id;
               return(
