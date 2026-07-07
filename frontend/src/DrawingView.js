@@ -41,7 +41,7 @@ const [allMarkups,setAllMarkups]=useState({});
   const isTeam=user.role==="team"||user.role==="admin";
 
  useEffect(()=>{
- useEffect(()=>{
+useEffect(()=>{
     api.getComments(drawing.id).then(d=>setComments(d.comments));
     api.getMarkups(drawing.id).then(d=>{
       const byPage={};
@@ -59,10 +59,6 @@ const [allMarkups,setAllMarkups]=useState({});
     setMarkups(paths);
     redraw();
   },[page,allMarkups]);
-    if(pdfReady)return;
-    const s=document.createElement("script");
-    s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";setPdfReady(true);};
     document.head.appendChild(s);
   },[]);
 
