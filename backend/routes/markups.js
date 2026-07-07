@@ -33,14 +33,14 @@ const { paths, page = 1, canvasWidth = 0, canvasHeight = 0 } = req.body;
     let data, error;
     if (existing) {
       ({ data, error } = await supabase
-        .from('markups').update({ paths, updated_at: new Date().toISOString() })
+.from('markups').update({ paths, page, canvas_width: canvasWidth, canvas_height: canvasHeight, updated_at: new Date().toISOString() })
         .eq('id', existing.id).select().single());
     } else {
       ({ data, error } = await supabase
         .from('markups').insert({
           drawing_id: req.params.drawingId,
           author_id: req.user.id,
-          paths, page, layer: markupLayer
+          paths, page, layer: markupLayer, canvas_width: canvasWidth, canvas_height: canvasHeight
         }).select().single());
     }
 
