@@ -52,10 +52,10 @@ const [allMarkups,setAllMarkups]=useState({});
   d.markups.forEach(m=>{byPage[m.page||1]=m.paths||[];});
   setAllMarkups(byPage);
   const currentPaths=byPage[1]||[];
-  pathsRef.current=currentPaths;
+pathsRef.current=currentPaths;
   setMarkups(currentPaths);
-});
-  },[drawing.id]);
+  });
+},[drawing.id]);
 
   useEffect(()=>{
   const paths=allMarkups[page]||[];
