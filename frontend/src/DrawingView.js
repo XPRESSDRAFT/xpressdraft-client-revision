@@ -233,7 +233,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 {COLORS.map(c=><div key={c} onClick={()=>setColor(c)} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?"2.5px solid "+B.black:"1.5px solid transparent"}}/>)}
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
-        <divstyle={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
+        <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;redraw();}} style={btnGhost}>↩</button>
         <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];redraw();}} style={btnGhost}>🗑</button>
         {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
