@@ -300,7 +300,6 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
   <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
           <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>📄 Export PDF</button>
-<button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>Export PDF</button>
       </div>
 
       {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.tone1,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
