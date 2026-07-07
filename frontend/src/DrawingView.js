@@ -17,6 +17,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [comments,setComments]=useState([]);
   const [markups,setMarkups]=useState([]);
   const [allMarkups,setAllMarkups]=useState({});
+  const [allMarkupDims,setAllMarkupDims]=useState({});
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState("#EA672F");
   const [strokeW,setStrokeW]=useState(2);
@@ -48,8 +49,13 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     api.getComments(drawing.id).then(d=>setComments(d.comments));
     api.getMarkups(drawing.id).then(d=>{
       const byPage={};
-      d.markups.forEach(m=>{byPage[m.page||1]=m.paths||[];});
+      const byPageDims={};
+      d.markups.forEach(m=>{
+        byPage[m.page||1]=m.paths||[];
+        byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
+      });
       setAllMarkups(byPage);
+      setAllMarkupDims(byPageDims);
       const currentPaths=byPage[1]||[];
       pathsRef.current=currentPaths;
       setMarkups(currentPaths);
@@ -232,11 +238,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     }catch(e){alert("Error: "+e.message);}
   };
 
-const handleSave=async()=>{
+  const handleSave=async()=>{
     setSaving(true);
-    const cw=markupRef.current?.width||0;
-    const ch=markupRef.current?.height||0;
-    await api.saveMarkups(drawing.id,markups,page,cw,ch);
+    await api.saveMarkups(drawing.id,markups,page);
     setAllMarkups(prev=>({...prev,[page]:markups}));
     setSaving(false);
   };
@@ -248,9 +252,9 @@ const handleSave=async()=>{
   const doExport=async()=>{
     if(!pdfDoc){alert("No drawing loaded.");return;}
     setExporting(true);setShowExportDialog(false);
+    const script=document.createElement("script");
+    script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
     if(!window.jspdf){
-      const script=document.createElement("script");
-      script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
       document.head.appendChild(script);
       await new Promise(r=>{script.onload=r;});
     }
@@ -268,30 +272,33 @@ const handleSave=async()=>{
       const ctx=c.getContext("2d");
       await pg.render({canvasContext:ctx,viewport:vp}).promise;
       const pagePaths=allMarkups[p]||[];
+      const dims=allMarkupDims[p]||{w:0,h:0};
+      const scaleX=dims.w>0?vp.width/dims.w:scale;
+      const scaleY=dims.h>0?vp.height/dims.h:scale;
       pagePaths.forEach(path=>{
         ctx.save();
         ctx.strokeStyle=path.color;
-        ctx.lineWidth=path.width*scale;
+        ctx.lineWidth=path.width*(scaleX+scaleY)/2;
         ctx.lineCap="round";ctx.lineJoin="round";
         if(path.tool==="hl"){ctx.globalAlpha=0.35;}
         if(path.tool==="textlabel"){
           ctx.fillStyle=path.color;
-          ctx.font=(14*scale)+"px sans-serif";
-          ctx.fillText(path.text,path.pts[0].x*scale,path.pts[0].y*scale);
+          ctx.font=(14*(scaleX+scaleY)/2)+"px sans-serif";
+          ctx.fillText(path.text,path.pts[0].x*scaleX,path.pts[0].y*scaleY);
         } else if(path.tool==="arrow"){
-          const x1=path.pts[0].x*scale,y1=path.pts[0].y*scale;
-          const x2=path.pts[1].x*scale,y2=path.pts[1].y*scale;
-          const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(path.width*scale*4,16);
+          const x1=path.pts[0].x*scaleX,y1=path.pts[0].y*scaleY;
+          const x2=path.pts[1].x*scaleX,y2=path.pts[1].y*scaleY;
+          const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(path.width*(scaleX+scaleY)/2*4,16);
           ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
           ctx.fillStyle=path.color;ctx.beginPath();ctx.moveTo(x2,y2);
           ctx.lineTo(x2-hw*Math.cos(ang-0.4),y2-hw*Math.sin(ang-0.4));
           ctx.lineTo(x2-hw*Math.cos(ang+0.4),y2-hw*Math.sin(ang+0.4));
           ctx.closePath();ctx.fill();
         } else if(path.tool==="cloud"){
-          const cx=(path.pts[0].x+path.pts[1].x)/2*scale;
-          const cy=(path.pts[0].y+path.pts[1].y)/2*scale;
-          const rw=Math.abs(path.pts[1].x-path.pts[0].x)/2*scale;
-          const rh=Math.abs(path.pts[1].y-path.pts[0].y)/2*scale;
+          const cx=(path.pts[0].x+path.pts[1].x)/2*scaleX;
+          const cy=(path.pts[0].y+path.pts[1].y)/2*scaleY;
+          const rw=Math.abs(path.pts[1].x-path.pts[0].x)/2*scaleX;
+          const rh=Math.abs(path.pts[1].y-path.pts[0].y)/2*scaleY;
           if(rw>5&&rh>5){
             ctx.beginPath();
             for(let a=0;a<=Math.PI*2;a+=0.15){
@@ -303,12 +310,12 @@ const handleSave=async()=>{
           }
         } else if(path.tool==="rect"){
           ctx.strokeRect(
-            path.pts[0].x*scale,path.pts[0].y*scale,
-            (path.pts[1].x-path.pts[0].x)*scale,(path.pts[1].y-path.pts[0].y)*scale
+            path.pts[0].x*scaleX,path.pts[0].y*scaleY,
+            (path.pts[1].x-path.pts[0].x)*scaleX,(path.pts[1].y-path.pts[0].y)*scaleY
           );
         } else {
           ctx.beginPath();
-          path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*scale,pt.y*scale):ctx.moveTo(pt.x*scale,pt.y*scale));
+          path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*scaleX,pt.y*scaleY):ctx.moveTo(pt.x*scaleX,pt.y*scaleY));
           ctx.stroke();
         }
         ctx.restore();
@@ -425,7 +432,7 @@ const handleSave=async()=>{
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <button onClick={()=>setZoom(1)} style={{...btnGhost,fontSize:11}}>Fit</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
+        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>‹</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>›</button></>}
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
       </div>
@@ -437,7 +444,8 @@ const handleSave=async()=>{
       </div>}
 
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}} onWheel={onWheel}>
+        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}}
+          onWheel={onWheel}>
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
             <canvas ref={canvasRef} style={{display:"block"}}/>
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
