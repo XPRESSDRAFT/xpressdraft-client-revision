@@ -99,3 +99,6 @@ export const saveMarkups = (drawingId, paths, page = 1) =>
   fetch(`${API}/api/drawings/${drawingId}/markups`, {
     method: 'PUT', headers: headers(), body: JSON.stringify({ paths, page })
   }).then(handle);
+
+export const incrementMarkupExport = (projectId, num) =>
+  req(`/api/projects/${projectId}/markup-export`, { method: 'POST', body: JSON.stringify({ exportNum: num }) });
