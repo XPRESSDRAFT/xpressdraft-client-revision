@@ -458,7 +458,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};redraw();}} style={btnGhost}>🗑</button>
+        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;console.log("CLEARING - paths before:",pathsRef.current.length);setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};console.log("CLEARED - paths after:",pathsRef.current.length);redraw();}}style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
