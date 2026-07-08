@@ -80,7 +80,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const vp=pg.getViewport({scale});
       canvasRef.current.width=vp.width;canvasRef.current.height=vp.height;
       markupRef.current.width=vp.width;markupRef.current.height=vp.height;
-      pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp}).promise.then(redraw);
+      pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp}).promise.then(()=>{
+        const c=markupRef.current;if(!c)return;
+        const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
+        pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));
+      });
     });
   },[pdfDoc,page,zoom]);
 
