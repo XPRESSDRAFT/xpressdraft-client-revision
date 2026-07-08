@@ -42,7 +42,7 @@ export const createProject = (data) =>
   fetch(`${API}/api/projects`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle);
 
 export const updateProject = (id, data) =>
-  fetch(`${API}/api/projects/${id}`, { method: 'PATCH', headers: headers(), body: JSON.stringify(data) }).then(handle);
+  fetch(`${API}/api/projects/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle);
 
 export const deleteProject = (id) =>
   fetch(`${API}/api/projects/${id}`, { method: 'DELETE', headers: headers() }).then(handle);
@@ -101,4 +101,6 @@ export const saveMarkups = (drawingId, paths, page = 1, canvasWidth = 0, canvasH
   }).then(handle);
 
 export const incrementMarkupExport = (projectId, num) =>
-  req(`/api/projects/${projectId}/markup-export`, { method: 'POST', body: JSON.stringify({ exportNum: num }) });
+  fetch(`${API}/api/projects/${projectId}/markup-export`, {
+    method: 'POST', headers: headers(), body: JSON.stringify({ exportNum: num })
+  }).then(handle);
