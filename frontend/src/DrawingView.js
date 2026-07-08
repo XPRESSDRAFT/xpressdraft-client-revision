@@ -42,23 +42,18 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
   const pathsRef=useRef([]);
-
   const isTeam=user.role==="team"||user.role==="admin";
 
   useEffect(()=>{
     api.getComments(drawing.id).then(d=>setComments(d.comments));
     api.getMarkups(drawing.id).then(d=>{
-      const byPage={};
-      const byPageDims={};
+      const byPage={};const byPageDims={};
       d.markups.forEach(m=>{
         byPage[m.page||1]=m.paths||[];
         byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
       });
-      setAllMarkups(byPage);
-      setAllMarkupDims(byPageDims);
-      const currentPaths=byPage[1]||[];
-      pathsRef.current=currentPaths;
-      setMarkups(currentPaths);
+      setAllMarkups(byPage);setAllMarkupDims(byPageDims);
+      const cp=byPage[1]||[];pathsRef.current=cp;setMarkups(cp);
     });
   },[drawing.id]);
 
@@ -73,8 +68,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   useEffect(()=>{
     if(!pdfReady||!drawing.file_url)return;
     window.pdfjsLib.getDocument({url:drawing.file_url}).promise
-      .then(doc=>{setPdfDoc(doc);setTotalPages(doc.numPages);})
-      .catch(console.error);
+      .then(doc=>{setPdfDoc(doc);setTotalPages(doc.numPages);}).catch(console.error);
   },[pdfReady,drawing.file_url]);
 
   useEffect(()=>{
@@ -94,32 +88,30 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   useEffect(()=>{
     const paths=allMarkups[page]||[];
-    pathsRef.current=paths;
-    setMarkups(paths);
-    redraw();
+    pathsRef.current=paths;setMarkups(paths);redraw();
   },[page,allMarkups]);
 
   const redraw=useCallback(()=>{
     const c=markupRef.current;if(!c)return;
     const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
-pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
+    pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));
   },[]);
 
-  function drawPath(ctx,p,scale){
-    scale=scale||1;
-    ctx.save();ctx.strokeStyle=p.color;ctx.lineWidth=p.width*scale;ctx.lineCap="round";ctx.lineJoin="round";
+  function drawPath(ctx,p,cw,ch){
+    cw=cw||ctx.canvas.width;ch=ch||ctx.canvas.height;
+    ctx.save();ctx.strokeStyle=p.color;ctx.lineWidth=p.width*cw;ctx.lineCap="round";ctx.lineJoin="round";
     if(p.tool==="hl"){ctx.globalAlpha=0.35;}
     if(p.tool==="textlabel"){
-      ctx.fillStyle=p.color;ctx.font=(14*scale)+"px Manrope,sans-serif";
-      ctx.fillText(p.text,p.pts[0].x*scale,p.pts[0].y*scale);
+      ctx.fillStyle=p.color;ctx.font="14px Manrope,sans-serif";
+      ctx.fillText(p.text,p.pts[0].x*cw,p.pts[0].y*ch);
     } else if(p.tool==="arrow"){
-      drawArrow(ctx,p.pts[0].x*scale,p.pts[0].y*scale,p.pts[1].x*scale,p.pts[1].y*scale,p.color,p.width*scale);
+      drawArrow(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);
     } else if(p.tool==="cloud"){
-      drawCloud(ctx,p.pts[0].x*scale,p.pts[0].y*scale,p.pts[1].x*scale,p.pts[1].y*scale,p.color,p.width*scale);
+      drawCloud(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);
     } else if(p.tool==="rect"){
-      ctx.strokeRect(p.pts[0].x*scale,p.pts[0].y*scale,(p.pts[1].x-p.pts[0].x)*scale,(p.pts[1].y-p.pts[0].y)*scale);
+      ctx.strokeRect(p.pts[0].x*cw,p.pts[0].y*ch,(p.pts[1].x-p.pts[0].x)*cw,(p.pts[1].y-p.pts[0].y)*ch);
     } else {
-      ctx.beginPath();p.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*scale,pt.y*scale):ctx.moveTo(pt.x*scale,pt.y*scale));ctx.stroke();
+      ctx.beginPath();p.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*cw,pt.y*ch):ctx.moveTo(pt.x*cw,pt.y*ch));ctx.stroke();
     }
     ctx.restore();
   }
@@ -137,8 +129,7 @@ pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
   function drawCloud(ctx,x1,y1,x2,y2,col,w){
     const cx=(x1+x2)/2,cy=(y1+y2)/2,rw=Math.abs(x2-x1)/2,rh=Math.abs(y2-y1)/2;
     if(rw<5||rh<5)return;
-    ctx.strokeStyle=col;ctx.lineWidth=w||2;
-    ctx.beginPath();
+    ctx.strokeStyle=col;ctx.lineWidth=w||2;ctx.beginPath();
     for(let a=0;a<=Math.PI*2;a+=0.15){
       const bx=cx+rw*Math.cos(a)+6*Math.cos(a*5);
       const by=cy+rh*Math.sin(a)+6*Math.sin(a*5);
@@ -148,50 +139,69 @@ pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
   }
 
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+  const getNorm=e=>{const r=markupRef.current.getBoundingClientRect();const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;return{x:(e.clientX-r.left)/cw,y:(e.clientY-r.top)/ch};};
 
   const onWheel=e=>{
     e.preventDefault();
-    const delta=e.deltaY>0?-0.1:0.1;
-    setZoom(z=>Math.min(3,Math.max(0.3,z+delta)));
+    setZoom(z=>Math.min(3,Math.max(0.3,z+(e.deltaY>0?-0.1:0.1))));
   };
 
   const onMouseDown=e=>{
     if(tool==="comment"){
       const r=markupRef.current.getBoundingClientRect();
-      const fx=(e.clientX-r.left)/markupRef.current.width;
-      const fy=(e.clientY-r.top)/markupRef.current.height;
-      setPendingPin({fx,fy});
+      setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});
       return;
     }
     if(tool==="select")return;
-    drawingRef.current=true;const{x,y}=getXY(e);startXY.current={x,y};curPath.current=[{x,y}];
-    if(tool==="text"){const t=prompt("Enter note:");if(t){const p={tool:"textlabel",color,width:strokeW,pts:[{x,y}],text:t,id:Date.now()};const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}drawingRef.current=false;}
+    drawingRef.current=true;
+    const norm=getNorm(e);
+    startXY.current=norm;curPath.current=[norm];
+    if(tool==="text"){
+      const t=prompt("Enter note:");
+      if(t){
+        const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};
+        const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();
+      }
+      drawingRef.current=false;
+    }
   };
 
   const onMouseMove=e=>{
-    if(!drawingRef.current)return;const{x,y}=getXY(e);const ctx=markupRef.current.getContext("2d");
+    if(!drawingRef.current)return;
+    const norm=getNorm(e);
+    const{x,y}=getXY(e);
+    const ctx=markupRef.current.getContext("2d");
+    const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;
     if(tool==="pen"||tool==="hl"){
-      curPath.current.push({x,y});ctx.save();
+      curPath.current.push(norm);ctx.save();
       if(tool==="hl"){ctx.globalAlpha=0.35;}
-      ctx.strokeStyle=color;ctx.lineWidth=tool==="hl"?strokeW*6:strokeW;ctx.lineCap="round";ctx.lineJoin="round";
-      const pts=curPath.current;ctx.beginPath();ctx.moveTo(pts[pts.length-2].x,pts[pts.length-2].y);ctx.lineTo(x,y);ctx.stroke();ctx.restore();
+      ctx.strokeStyle=color;
+      ctx.lineWidth=tool==="hl"?strokeW*6:strokeW;
+      ctx.lineCap="round";ctx.lineJoin="round";
+      const pts=curPath.current;
+      const prev=pts[pts.length-2];
+      ctx.beginPath();ctx.moveTo(prev.x*cw,prev.y*ch);ctx.lineTo(norm.x*cw,norm.y*ch);ctx.stroke();ctx.restore();
     } else if(tool==="erase"){ctx.clearRect(x-12,y-12,24,24);}
     else{
       redraw();ctx.save();ctx.strokeStyle=color;ctx.lineWidth=strokeW;ctx.lineCap="round";
-      if(tool==="arrow")drawArrow(ctx,startXY.current.x,startXY.current.y,x,y,color,strokeW);
-      else if(tool==="cloud")drawCloud(ctx,startXY.current.x,startXY.current.y,x,y,color,strokeW);
-      else if(tool==="rect")ctx.strokeRect(startXY.current.x,startXY.current.y,x-startXY.current.x,y-startXY.current.y);
+      const sx=startXY.current.x*cw,sy=startXY.current.y*ch;
+      if(tool==="arrow")drawArrow(ctx,sx,sy,x,y,color,strokeW);
+      else if(tool==="cloud")drawCloud(ctx,sx,sy,x,y,color,strokeW);
+      else if(tool==="rect")ctx.strokeRect(sx,sy,x-sx,y-sy);
       ctx.restore();
     }
   };
 
   const onMouseUp=e=>{
-    if(!drawingRef.current)return;drawingRef.current=false;const{x,y}=getXY(e);let p;
-    if(tool==="pen"||tool==="hl")p={tool,color,width:tool==="hl"?strokeW*6:strokeW,pts:[...curPath.current],id:Date.now()};
-    else if(tool==="arrow")p={tool:"arrow",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    else if(tool==="cloud")p={tool:"cloud",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    else if(tool==="rect")p={tool:"rect",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
+    if(!drawingRef.current)return;drawingRef.current=false;
+    const norm=getNorm(e);
+    const cw=markupRef.current.width||1;
+    let p;
+    if(tool==="pen"||tool==="hl")p={tool,color,width:(tool==="hl"?strokeW*6:strokeW)/cw,pts:[...curPath.current],id:Date.now()};
+    else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
+    else if(tool==="cloud")p={tool:"cloud",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
+    else if(tool==="rect")p={tool:"rect",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
+    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}
     curPath.current=[];
   };
 
@@ -226,8 +236,7 @@ pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
   const confirmRevision=async(commentId)=>{
     try{
       const rs=revisionSummary;
-      const nextRev=(rs?.used||0)+1;
-      const total=rs?.totalAllowed||2;
+      const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
       const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
       const confirmed=window.confirm("Confirm Revision\n\n"+stage+" Stage - This will use Revision "+nextRev+" of "+total+".\n\nProceed?");
       if(!confirmed)return;
@@ -238,22 +247,16 @@ pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
     }catch(e){alert("Error: "+e.message);}
   };
 
-const handleSave=async()=>{
+  const handleSave=async()=>{
     setSaving(true);
-    const cw=Math.round((markupRef.current?.width||0)/zoom);
-    const ch=Math.round((markupRef.current?.height||0)/zoom);
-    const normalizedMarkups=markups.map(p=>({
-      ...p,
-      pts:p.pts.map(pt=>({x:pt.x/zoom,y:pt.y/zoom})),
-      width:p.width/zoom
-    }));
-    await api.saveMarkups(drawing.id,normalizedMarkups,page,cw,ch);
+    const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
+    await api.saveMarkups(drawing.id,markups,page,cw,ch);
     setAllMarkups(prev=>({...prev,[page]:markups}));
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
   };
 
-  const handleExportPDF=async()=>{setShowExportDialog(true);};
+  const handleExportPDF=()=>setShowExportDialog(true);
 
   const doExport=async()=>{
     if(!pdfDoc){alert("No drawing loaded.");return;}
@@ -270,41 +273,34 @@ const handleSave=async()=>{
     const allPins=comments.filter(c=>c.pin_x!=null).sort((a,b)=>(a.page||1)-(b.page||1));
     for(let p=1;p<=totalPages;p++){
       const pg=await pdfDoc.getPage(p);
-      const vp0=pg.getViewport({scale:1});
-      const scale=2;
-      const vp=pg.getViewport({scale});
+      const vp=pg.getViewport({scale:2});
       const c=document.createElement("canvas");
       c.width=vp.width;c.height=vp.height;
       const ctx=c.getContext("2d");
       await pg.render({canvasContext:ctx,viewport:vp}).promise;
       const pagePaths=allMarkups[p]||[];
-      const dims=allMarkupDims[p]||{w:0,h:0};
-      const scaleX=dims.w>0?vp.width/dims.w:scale;
-      const scaleY=dims.h>0?vp.height/dims.h:scale;
       pagePaths.forEach(path=>{
-        ctx.save();
-        ctx.strokeStyle=path.color;
-        ctx.lineWidth=path.width*(scaleX+scaleY)/2;
+        ctx.save();ctx.strokeStyle=path.color;
+        ctx.lineWidth=path.width*vp.width;
         ctx.lineCap="round";ctx.lineJoin="round";
         if(path.tool==="hl"){ctx.globalAlpha=0.35;}
         if(path.tool==="textlabel"){
-          ctx.fillStyle=path.color;
-          ctx.font=(14*(scaleX+scaleY)/2)+"px sans-serif";
-          ctx.fillText(path.text,path.pts[0].x*scaleX,path.pts[0].y*scaleY);
+          ctx.fillStyle=path.color;ctx.font="28px sans-serif";
+          ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);
         } else if(path.tool==="arrow"){
-          const x1=path.pts[0].x*scaleX,y1=path.pts[0].y*scaleY;
-          const x2=path.pts[1].x*scaleX,y2=path.pts[1].y*scaleY;
-          const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(path.width*(scaleX+scaleY)/2*4,16);
+          const x1=path.pts[0].x*vp.width,y1=path.pts[0].y*vp.height;
+          const x2=path.pts[1].x*vp.width,y2=path.pts[1].y*vp.height;
+          const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(path.width*vp.width*4,16);
           ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
           ctx.fillStyle=path.color;ctx.beginPath();ctx.moveTo(x2,y2);
           ctx.lineTo(x2-hw*Math.cos(ang-0.4),y2-hw*Math.sin(ang-0.4));
           ctx.lineTo(x2-hw*Math.cos(ang+0.4),y2-hw*Math.sin(ang+0.4));
           ctx.closePath();ctx.fill();
         } else if(path.tool==="cloud"){
-          const cx=(path.pts[0].x+path.pts[1].x)/2*scaleX;
-          const cy=(path.pts[0].y+path.pts[1].y)/2*scaleY;
-          const rw=Math.abs(path.pts[1].x-path.pts[0].x)/2*scaleX;
-          const rh=Math.abs(path.pts[1].y-path.pts[0].y)/2*scaleY;
+          const cx=(path.pts[0].x+path.pts[1].x)/2*vp.width;
+          const cy=(path.pts[0].y+path.pts[1].y)/2*vp.height;
+          const rw=Math.abs(path.pts[1].x-path.pts[0].x)/2*vp.width;
+          const rh=Math.abs(path.pts[1].y-path.pts[0].y)/2*vp.height;
           if(rw>5&&rh>5){
             ctx.beginPath();
             for(let a=0;a<=Math.PI*2;a+=0.15){
@@ -315,44 +311,39 @@ const handleSave=async()=>{
             ctx.closePath();ctx.stroke();
           }
         } else if(path.tool==="rect"){
-          ctx.strokeRect(
-            path.pts[0].x*scaleX,path.pts[0].y*scaleY,
-            (path.pts[1].x-path.pts[0].x)*scaleX,(path.pts[1].y-path.pts[0].y)*scaleY
-          );
+          ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);
         } else {
           ctx.beginPath();
-          path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*scaleX,pt.y*scaleY):ctx.moveTo(pt.x*scaleX,pt.y*scaleY));
+          path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));
           ctx.stroke();
         }
         ctx.restore();
       });
       const pageComments=allPins.filter(cc=>(cc.page||1)===p);
       pageComments.forEach(cc=>{
-        const globalIdx=allPins.indexOf(cc);
-        const x=cc.pin_x*vp.width;const y=cc.pin_y*vp.height;
+        const gi=allPins.indexOf(cc);
+        const x=cc.pin_x*vp.width,y=cc.pin_y*vp.height;
         ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();
         ctx.fillStyle="#fff";ctx.font="bold 18px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
-        ctx.fillText(globalIdx+1,x,y);
+        ctx.fillText(gi+1,x,y);
       });
       const imgData=c.toDataURL("image/jpeg",0.9);
-      const pw=pdf.internal.pageSize.getWidth();
-      const ph=pdf.internal.pageSize.getHeight();
+      const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
       const ratio=Math.min(pw/vp.width,ph/vp.height);
       if(!firstPage)pdf.addPage();
       pdf.addImage(imgData,"JPEG",0,0,vp.width*ratio,vp.height*ratio);
       firstPage=false;
-      const pageCommentList=allPins.filter(cc=>(cc.page||1)===p);
-      if(pageCommentList.length>0){
+      if(pageComments.length>0){
         pdf.addPage();const cpw=pdf.internal.pageSize.getWidth();
-        pdf.setFontSize(14);pdf.setTextColor(42,43,41);pdf.text("Comments — Page "+p,40,30);
+        pdf.setFontSize(14);pdf.setTextColor(42,43,41);pdf.text("Comments - Page "+p,40,30);
         pdf.setDrawColor(210,202,196);pdf.line(40,36,cpw-40,36);
         let cy=50;
-        pageCommentList.forEach((cc)=>{
+        pageComments.forEach((cc)=>{
           if(cy>500){pdf.addPage();cy=30;}
-          const globalIdx=allPins.indexOf(cc);
+          const gi=allPins.indexOf(cc);
           pdf.setFontSize(11);pdf.setTextColor(226,75,74);
-          const typeLabel=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
-          pdf.text("Pin "+(globalIdx+1)+" — "+typeLabel,40,cy);
+          const tl=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
+          pdf.text("Pin "+(gi+1)+" - "+tl,40,cy);
           pdf.setTextColor(42,43,41);pdf.setFontSize(10);
           const lines=pdf.splitTextToSize(cc.text,cpw-80);
           pdf.text(lines,40,cy+13);cy+=13+(lines.length*12)+10;
@@ -361,8 +352,8 @@ const handleSave=async()=>{
               if(cy>500){pdf.addPage();cy=30;}
               pdf.setTextColor(234,103,47);pdf.setFontSize(9);
               pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":",52,cy);
-              pdf.setTextColor(66,69,60);const rlines=pdf.splitTextToSize(r.text,cpw-100);
-              pdf.text(rlines,52,cy+10);cy+=10+(rlines.length*11)+6;
+              pdf.setTextColor(66,69,60);const rl=pdf.splitTextToSize(r.text,cpw-100);
+              pdf.text(rl,52,cy+10);cy+=10+(rl.length*11)+6;
             });
           }
           pdf.setDrawColor(242,234,229);pdf.line(40,cy,cpw-40,cy);cy+=8;
@@ -379,8 +370,8 @@ const handleSave=async()=>{
     allPins.forEach((cc,i)=>{
       if(y>480){pdf.addPage();y=40;}
       pdf.setFontSize(11);pdf.setTextColor(226,75,74);
-      const typeLabel=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
-      pdf.text("Pin "+(i+1)+" - "+typeLabel+" (Page "+(cc.page||1)+")",40,y);
+      const tl=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
+      pdf.text("Pin "+(i+1)+" - "+tl+" (Page "+(cc.page||1)+")",40,y);
       pdf.setTextColor(42,43,41);pdf.setFontSize(10);
       const lines=pdf.splitTextToSize(cc.text,pw-80);
       pdf.text(lines,40,y+14);y+=14+(lines.length*13)+10;
@@ -388,29 +379,22 @@ const handleSave=async()=>{
     });
     const jobNum=(project.job_number||"").replace(/\s+/g,"-");
     const addr=(project.site_address||project.name||"drawing").replace(/\s+/g,"-").replace(/[^a-zA-Z0-9-]/g,"");
-    const filename=jobNum+(addr?"-"+addr:"")+"-Markup-"+exportNum+".pdf";
-    pdf.save(filename);
+    pdf.save(jobNum+(addr?"-"+addr:"")+"-Markup-"+exportNum+".pdf");
     await api.incrementMarkupExport(project.id,exportNum);
-    setExportNum(exportNum+1);
-    setExporting(false);
+    setExportNum(exportNum+1);setExporting(false);
   };
 
   const submitAllChanges=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
     const rs=revisionSummary;
-    const nextRev=(rs?.used||0)+1;
-    const total=rs?.totalAllowed||2;
+    const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
     const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nYou have "+openComments.length+" comment"+(openComments.length!==1?"s":"")+" to submit.\n\nProceed?");
     if(!confirmed)return;
     let lastSummary=rs;
     for(const c of openComments){
-      try{
-        const d=await api.confirmRevision(drawing.id,c.id);
-        lastSummary=d.revisionSummary;
-        setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));
-      }catch(e){break;}
+      try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
     }
     if(lastSummary)onRevisionConfirmed(lastSummary);
     alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
@@ -429,10 +413,7 @@ const handleSave=async()=>{
             <label style={{fontSize:13,color:B.black1,display:"block",marginBottom:6,fontWeight:500}}>Markup number</label>
             <input type="number" value={exportNum} onChange={e=>setExportNum(+e.target.value)}
               style={{width:"100%",border:"1px solid "+B.tone1,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",boxSizing:"border-box",marginBottom:8}}/>
-            <p style={{fontSize:12,color:B.black2,margin:"0 0 20px"}}>
-              File will be saved as:<br/>
-              <strong>{(project.job_number||"").replace(/\s+/g,"-")+"-"+(project.site_address||project.name||"drawing").replace(/\s+/g,"-").replace(/[^a-zA-Z0-9-]/g,"")+"-Markup-"+exportNum+".pdf"}</strong>
-            </p>
+            <p style={{fontSize:12,color:B.black2,margin:"0 0 20px"}}>File: <strong>{(project.job_number||"").replace(/\s+/g,"-")+"-"+(project.site_address||project.name||"drawing").replace(/\s+/g,"-").replace(/[^a-zA-Z0-9-]/g,"")+"-Markup-"+exportNum+".pdf"}</strong></p>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setShowExportDialog(false)} style={btnGhost}>Cancel</button>
               <button onClick={doExport} style={btnPrimary}>Export PDF</button>
@@ -440,7 +421,6 @@ const handleSave=async()=>{
           </div>
         </div>
       )}
-
       <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
         {[["select","ESC","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
@@ -456,22 +436,20 @@ const handleSave=async()=>{
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;redraw();}} style={btnGhost}>↩</button>
         <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];redraw();}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-<button onClick={()=>setZoom(z=>Math.Max(0.3,z-0.1))} style={btnGhost}>-</button>
-<span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
-<button onClick={()=>setZoom(z=>Math.min(3,z+0.1))} style={btnGhost}>+</button>
+        <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
+        <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
+        <button onClick={()=>setZoom(z=>Math.min(3,z+0.1))} style={btnGhost}>+</button>
         <button onClick={()=>setZoom(1)} style={{...btnGhost,fontSize:11}}>Fit</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
       </div>
-
       {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.tone1,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
       {pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.orange,padding:"5px 16px",fontSize:12,color:B.black1,fontFamily:"Manrope,sans-serif",display:"flex",alignItems:"center",gap:12}}>
         <span>Pin placed - write your comment in the sidebar then click Done.</span>
         <button onClick={()=>setPendingPin(null)} style={{marginLeft:"auto",padding:"3px 10px",background:"none",border:"1px solid "+B.orange,borderRadius:5,color:B.orange,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>Cancel pin</button>
       </div>}
-
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
         <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}} onWheel={onWheel}>
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
@@ -484,18 +462,17 @@ const handleSave=async()=>{
                 {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
                   const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
-                  const globalIdx=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
+                  const gi=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
                   return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
                     style={{position:"absolute",left:c.pin_x*w,top:c.pin_y*h,transform:"translate(-50%,-50%) scale("+(selectedCid===c.id?1.3:1)+")",
                       width:22,height:22,borderRadius:"50%",background:ct.dot,border:"2px solid white",
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",
-                      cursor:"pointer",zIndex:10,transition:"transform 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)",pointerEvents:"all"}}>{globalIdx+1}</div>;
+                      cursor:"pointer",zIndex:10,transition:"transform 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)",pointerEvents:"all"}}>{gi+1}</div>;
                 })}
               </div>
             </div>
           </div>
         </div>
-
         <div style={{width:280,background:B.white,borderLeft:"1px solid "+B.tone1,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,borderBottom:"1px solid "+B.tone1,letterSpacing:"0.05em"}}>
             {comments.filter(c=>(c.page||1)===page).length} COMMENT{comments.filter(c=>(c.page||1)===page).length!==1?"S":""}
@@ -505,13 +482,13 @@ const handleSave=async()=>{
             {comments.filter(c=>(c.page||1)===page).map((c)=>{
               const ct=CTYPES[c.type]||CTYPES.note;
               const isSelected=selectedCid===c.id;
-              const globalIdx=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
+              const gi=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
               return(
                 <div key={c.id} style={{marginBottom:10}}>
                   <div onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
                     style={{background:isSelected?"#FEF3E8":B.cream,border:"1px solid "+(isSelected?B.orange:B.tone1),borderRadius:8,padding:"10px 11px",cursor:"pointer",borderLeft:"3px solid "+ct.dot}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",background:ct.dot,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700}}>{c.pin_x!=null?globalIdx+1:""}</div>
+                      <div style={{width:20,height:20,borderRadius:"50%",background:ct.dot,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700}}>{c.pin_x!=null?gi+1:""}</div>
                       <span style={{fontSize:12,fontWeight:600,color:B.black,flex:1}}>{c.author?.name}</span>
                       <span style={{fontSize:10,color:B.black2}}>{new Date(c.created_at).toLocaleDateString("en-AU",{day:"numeric",month:"short"})}</span>
                     </div>
@@ -525,7 +502,6 @@ const handleSave=async()=>{
                       <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete this comment?"))setComments(comments.filter(x=>x.id!==c.id));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid #E24B4A",borderRadius:4,background:B.white,cursor:"pointer",color:"#8B2020",fontFamily:"Manrope,sans-serif"}}>Delete</button>
                     </div>}
                   </div>
-
                   {(c.replies||[]).map(r=>(
                     <div key={r.id} style={{marginLeft:12,marginTop:5,padding:"8px 10px",background:r.author?.role==="team"||r.author?.role==="admin"?"#FEF3E8":B.white,border:"1px solid "+(r.author?.role==="team"||r.author?.role==="admin"?B.orange:B.tone1),borderRadius:7,borderLeft:"3px solid "+(r.author?.role==="team"||r.author?.role==="admin"?B.orange:B.tone2)}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
@@ -536,7 +512,6 @@ const handleSave=async()=>{
                       <p style={{fontSize:12,color:B.black1,margin:0,lineHeight:1.5}}>{r.text}</p>
                     </div>
                   ))}
-
                   {isSelected&&user.role!=="admin"&&user.role!=="team"&&c.status==="interpreted"&&(
                     <div style={{marginLeft:12,marginTop:8,padding:12,background:"#FEF3E8",border:"1px solid "+B.orange,borderRadius:8}}>
                       <p style={{fontSize:12,color:B.black1,margin:"0 0 6px",fontWeight:600}}>This will use a revision</p>
@@ -549,7 +524,6 @@ const handleSave=async()=>{
                       </div>
                     </div>
                   )}
-
                   {isSelected&&isTeam&&c.status==="open"&&(
                     <div style={{marginLeft:12,marginTop:6}}>
                       <button onClick={()=>interpret(c.id)} disabled={interpreting===c.id}
@@ -558,7 +532,6 @@ const handleSave=async()=>{
                       </button>
                     </div>
                   )}
-
                   {isSelected&&replyTarget===c.id&&c.status!=="confirmed"&&(
                     <div style={{marginLeft:12,marginTop:6}}>
                       <textarea value={replyDraft} onChange={e=>setReplyDraft(e.target.value)} rows={2}
@@ -574,7 +547,6 @@ const handleSave=async()=>{
               );
             })}
           </div>
-
           <div style={{padding:10,borderTop:"1px solid "+B.tone1}}>
             {pendingPin&&<div style={{fontSize:11,color:B.orange,marginBottom:6}}>Pin placed - write your comment below</div>}
             <textarea value={newComment} onChange={e=>setNewComment(e.target.value)} rows={2}
