@@ -84,7 +84,10 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     });
   },[pdfDoc,page,zoom]);
 
-  useEffect(()=>{pathsRef.current=markups;},[markups]);
+  useEffect(()=>{
+    pathsRef.current=markups;
+    setAllMarkups(prev=>({...prev,[page]:markups}));
+  },[markups,page]);
 
   useEffect(()=>{
     const paths=allMarkups[page]||[];
