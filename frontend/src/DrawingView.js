@@ -100,9 +100,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     });
   },[pdfDoc,page,zoom]);
 
-  useEffect(()=>{
-    pathsRef.current=markups;
-  },[markups]);
+  // pathsRef is managed directly - not via useEffect to avoid stale state restoration
 
   const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;clearedRef.current=false;setMarkups(paths);};
 
