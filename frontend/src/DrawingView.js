@@ -456,9 +456,9 @@ const handleSave=async()=>{
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;redraw();}} style={btnGhost}>↩</button>
         <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];redraw();}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>setZoom(z=>Math.min(3,z+0.1))} style={btnGhost}>+</button>
-        <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
-        <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
+<button onClick={()=>setZoom(z=>Math.Max(0.3,z-0.1))} style={btnGhost}>-</button>
+<span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
+<button onClick={()=>setZoom(z=>Math.min(3,z+0.1))} style={btnGhost}>+</button>
         <button onClick={()=>setZoom(1)} style={{...btnGhost,fontSize:11}}>Fit</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
