@@ -16,7 +16,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const wrapRef=useRef();
   const [comments,setComments]=useState([]);
   const [markups,setMarkups]=useState([]);
-  const [allMarkups,setAllMarkups]=useState({});
+  const allMarkupsRef=useRef({});
   const [allMarkupDims,setAllMarkupDims]=useState({});
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState("#EA672F");
@@ -52,7 +52,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         byPage[m.page||1]=m.paths||[];
         byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
       });
-      setAllMarkups(byPage);setAllMarkupDims(byPageDims);
+      allMarkupsRef.current=byPage;setAllMarkupDims(byPageDims);
       const cp=byPage[1]||[];pathsRef.current=cp;setMarkups(cp);
     });
   },[drawing.id]);
@@ -93,7 +93,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   },[markups]);
 
   const loadPage=(p)=>{
-    const paths=allMarkups[p]||[];
+    const paths=allMarkupsRef.current[p]||[];
     pathsRef.current=paths;
     setMarkups(paths);
   };
@@ -174,7 +174,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const t=prompt("Enter note:");
       if(t){
         const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};
-        const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;setAllMarkups(prev=>({...prev,[page]:u}));redraw();
+        const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
       }
       drawingRef.current=false;
     }
@@ -215,7 +215,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="cloud")p={tool:"cloud",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="rect")p={tool:"rect",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
-    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;setAllMarkups(prev=>({...prev,[page]:u}));redraw();}
+    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
     curPath.current=[];
   };
 
@@ -265,7 +265,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setSaving(true);
     const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
     await api.saveMarkups(drawing.id,markups,page,cw,ch);
-    setAllMarkups(prev=>({...prev,[page]:markups}));
+    allMarkupsRef.current={...allMarkupsRef.current,[page]:markups};
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
   };
@@ -292,7 +292,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       c.width=vp.width;c.height=vp.height;
       const ctx=c.getContext("2d");
       await pg.render({canvasContext:ctx,viewport:vp}).promise;
-      const pagePaths=allMarkups[p]||[];
+      const pagePaths=allMarkupsRef.current[p]||[];
       pagePaths.forEach(path=>{
         ctx.save();ctx.strokeStyle=path.color;
         ctx.lineWidth=path.width*vp.width;
@@ -447,8 +447,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;setAllMarkups(prev=>({...prev,[page]:u}));redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];setAllMarkups(prev=>({...prev,[page]:[]}));redraw();}} style={btnGhost}>🗑</button>
+        <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
+        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};redraw();}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
