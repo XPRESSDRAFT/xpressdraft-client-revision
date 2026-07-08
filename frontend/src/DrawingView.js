@@ -37,6 +37,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [exportNum,setExportNum]=useState((project.markup_export_count||0)+1);
   const [showExportDialog,setShowExportDialog]=useState(false);
   const [exporting,setExporting]=useState(false);
+  const [showClearConfirm,setShowClearConfirm]=useState(false);
   const drawingRef=useRef(false);
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
@@ -448,7 +449,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={async()=>{if(!window.confirm("Clear all markup?"))return;pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={btnGhost}>🗑</button>
+        <button onClick={()=>setShowClearConfirm(true)} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
@@ -459,6 +460,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
       </div>
+      {showClearConfirm&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:28,width:320,fontFamily:"Manrope,sans-serif"}}><h3 style={{margin:"0 0 12px",color:B.black,fontSize:16}}>Clear all markup?</h3><p style={{fontSize:13,color:B.black2,margin:"0 0 20px"}}>This will remove all markup on this page.</p><div style={{display:"flex",gap:8}}><button onClick={()=>setShowClearConfirm(false)} style={btnGhost}>Cancel</button><button onClick={async()=>{setShowClearConfirm(false);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={{...btnPrimary,background:"#E24B4A"}}>Clear markup</button></div></div></div>)}
       {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.tone1,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
       {pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.orange,padding:"5px 16px",fontSize:12,color:B.black1,fontFamily:"Manrope,sans-serif",display:"flex",alignItems:"center",gap:12}}>
         <span>Pin placed - write your comment in the sidebar then click Done.</span>
