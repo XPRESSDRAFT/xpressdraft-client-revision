@@ -191,7 +191,7 @@ pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
     else if(tool==="cloud")p={tool:"cloud",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
     else if(tool==="rect")p={tool:"rect",color,width:strokeW,pts:[{x:startXY.current.x,y:startXY.current.y},{x,y}],id:Date.now()};
-    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;redraw();}
+pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
     curPath.current=[];
   };
 
