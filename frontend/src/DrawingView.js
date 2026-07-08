@@ -148,10 +148,17 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const getNorm=e=>{const r=markupRef.current.getBoundingClientRect();const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;return{x:(e.clientX-r.left)/cw,y:(e.clientY-r.top)/ch};};
 
-  const onWheel=e=>{
+  const onWheel=useCallback(e=>{
     e.preventDefault();
-    setZoom(z=>Math.min(3,Math.max(0.3,z+(e.deltaY>0?-0.1:0.1))));
-  };
+    setZoom(z=>Math.min(3,Math.max(0.3,+(z+(e.deltaY>0?-0.1:0.1)).toFixed(1))));
+  },[]);
+
+  useEffect(()=>{
+    const el=wrapRef.current;
+    if(!el)return;
+    el.addEventListener('wheel',onWheel,{passive:false});
+    return()=>el.removeEventListener('wheel',onWheel);
+  },[onWheel]);
 
   const onMouseDown=e=>{
     if(tool==="comment"){
@@ -458,7 +465,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={()=>setPendingPin(null)} style={{marginLeft:"auto",padding:"3px 10px",background:"none",border:"1px solid "+B.orange,borderRadius:5,color:B.orange,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>Cancel pin</button>
       </div>}
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}} onWheel={onWheel}>
+        <div ref={wrapRef} style={{flex:1,overflow:"auto",background:"#555",display:"flex",justifyContent:"center",alignItems:"flex-start",padding:24}}>
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
             <canvas ref={canvasRef} style={{display:"block"}}/>
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
