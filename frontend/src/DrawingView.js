@@ -92,6 +92,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         renderTaskRef.current=null;
         const c=markupRef.current;if(!c)return;
         const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
+        console.log("RENDER COMPLETE - clearedRef:",clearedRef.current,"paths:",pathsRef.current.length);
         if(!clearedRef.current){pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));}
       }).catch(err=>{
         if(err?.name!=="RenderingCancelledException")console.error(err);
@@ -451,7 +452,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;clearedRef.current=true;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};redraw();}} style={btnGhost}>🗑</button>
+        <button onClick={async()=>{if(!window.confirm("Clear all markup?"))return;clearedRef.current=true;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
