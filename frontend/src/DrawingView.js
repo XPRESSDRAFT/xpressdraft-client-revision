@@ -43,6 +43,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const startXY=useRef({x:0,y:0});
   const pathsRef=useRef([]);
   const renderTaskRef=useRef(null);
+  const clearedRef=useRef(false);
   const isTeam=user.role==="team"||user.role==="admin";
 
   useEffect(()=>{
@@ -54,7 +55,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
       });
       allMarkupsRef.current=byPage;setAllMarkupDims(byPageDims);
-      const cp=byPage[1]||[];pathsRef.current=cp;setMarkups(cp);
+      const cp=byPage[1]||[];pathsRef.current=cp;clearedRef.current=false;setMarkups(cp);
     });
   },[drawing.id]);
 
@@ -91,7 +92,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         renderTaskRef.current=null;
         const c=markupRef.current;if(!c)return;
         const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
-        pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));
+        if(!clearedRef.current){pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));}
       }).catch(err=>{
         if(err?.name!=="RenderingCancelledException")console.error(err);
       });
@@ -102,17 +103,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     pathsRef.current=markups;
   },[markups]);
 
-  const loadPage=(p)=>{
-    const paths=allMarkupsRef.current[p]||[];
-    pathsRef.current=paths;
-    setMarkups(paths);
-  };
+  const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;clearedRef.current=false;setMarkups(paths);};
 
-  const redraw=useCallback(()=>{
-    const c=markupRef.current;if(!c)return;
-    const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
-    pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));
-  },[]);
+  const redraw=useCallback(()=>{const c=markupRef.current;if(!c)return;const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));},[]);
 
   function drawPath(ctx,p,cw,ch){
     cw=cw||ctx.canvas.width;ch=ch||ctx.canvas.height;
@@ -184,7 +177,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const t=prompt("Enter note:");
       if(t){
         const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};
-        const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
+        clearedRef.current=false;const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
       }
       drawingRef.current=false;
     }
@@ -225,7 +218,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="cloud")p={tool:"cloud",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="rect")p={tool:"rect",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
-    if(p){const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
+    if(p){clearedRef.current=false;const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
     curPath.current=[];
   };
 
@@ -458,7 +451,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;console.log("CLEARING - paths before:",pathsRef.current.length);setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};console.log("CLEARED - paths after:",pathsRef.current.length);redraw();}}style={btnGhost}>🗑</button>
+        <button onClick={()=>{if(!window.confirm("Clear all markup?"))return;clearedRef.current=true;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};redraw();}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
