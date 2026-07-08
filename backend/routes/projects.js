@@ -33,7 +33,7 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, teamOnly, async (req, res) => {
   try {
-    const { name, description, stage, clientId } = req.body;
+    const { name, description, stage, clientId, jobNumber, siteAddress } = req.body;
     if (!name || !stage) return res.status(400).json({ error: 'Name and stage required' });
     if (!['preliminary', 'working_drawings'].includes(stage)) {
       return res.status(400).json({ error: 'Stage must be preliminary or working_drawings' });
@@ -41,7 +41,13 @@ router.post('/', auth, teamOnly, async (req, res) => {
 
     const { data, error } = await supabase
       .from('projects')
-      .insert({ name, description, stage, client_id: clientId || null, created_by: req.user.id })
+      .insert({
+        name, description, stage,
+        client_id: clientId || null,
+        job_number: jobNumber || null,
+        site_address: siteAddress || null,
+        created_by: req.user.id
+      })
       .select(`*, client:users!projects_client_id_fkey(id, name, email)`)
       .single();
 
@@ -58,7 +64,7 @@ router.get('/:id', auth, async (req, res) => {
     const { data, error } = await supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        drawings(*, comments(*, author:users(name, role), replies(*, author:users(name, role)))),
+        drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role)))),
         revisions(*)`)
       .eq('id', req.params.id)
       .single();
@@ -75,14 +81,16 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-router.patch('/:id', auth, teamOnly, async (req, res) => {
+router.put('/:id', auth, teamOnly, async (req, res) => {
   try {
-    const { name, description, stage, clientId } = req.body;
+    const { name, description, stage, clientId, jobNumber, siteAddress } = req.body;
     const updates = { updated_at: new Date().toISOString() };
-    if (name) updates.name = name;
+    if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
-    if (stage) updates.stage = stage;
+    if (stage !== undefined) updates.stage = stage;
     if (clientId !== undefined) updates.client_id = clientId;
+    if (jobNumber !== undefined) updates.job_number = jobNumber;
+    if (siteAddress !== undefined) updates.site_address = siteAddress;
 
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
@@ -128,6 +136,16 @@ router.post('/:id/bonus-revision', auth, teamOnly, async (req, res) => {
   }
 });
 
+router.post('/:id/markup-export', auth, async (req, res) => {
+  try {
+    const { exportNum } = req.body;
+    await supabase.from('projects').update({ markup_export_count: exportNum }).eq('id', req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update export count' });
+  }
+});
+
 function buildRevisionSummary(stage, revisions) {
   const freeAllowed = stage === 'preliminary' ? 2 : 1;
   const stageLabel = stage === 'preliminary' ? 'PR' : 'WD';
@@ -142,23 +160,4 @@ function buildRevisionSummary(stage, revisions) {
   };
 }
 
-router.post('/:id/markup-export', auth, async (req, res) => {
-  try {
-    const { exportNum } = req.body;
-    await supabase.from('projects').update({ markup_export_count: exportNum }).eq('id', req.params.id);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update export count' });
-  }
-});
-
-router.post('/:id/markup-export', auth, async (req, res) => {
-  try {
-    const { exportNum } = req.body;
-    await supabase.from('projects').update({ markup_export_count: exportNum }).eq('id', req.params.id);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update export count' });
-  }
-});
 module.exports = router;
