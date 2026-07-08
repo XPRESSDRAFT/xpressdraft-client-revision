@@ -15,7 +15,6 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const markupRef=useRef();
   const wrapRef=useRef();
   const [comments,setComments]=useState([]);
-  const [markups,setMarkups]=useState([]);
   const allMarkupsRef=useRef({});
   const [allMarkupDims,setAllMarkupDims]=useState({});
   const [tool,setTool]=useState("pen");
@@ -55,7 +54,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
       });
       allMarkupsRef.current=byPage;setAllMarkupDims(byPageDims);
-      const cp=byPage[1]||[];pathsRef.current=cp;clearedRef.current=false;setMarkups(cp);
+      const cp=byPage[1]||[];pathsRef.current=cp;clearedRef.current=false;
     });
   },[drawing.id]);
 
@@ -102,7 +101,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   // pathsRef is managed directly - not via useEffect to avoid stale state restoration
 
-  const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;clearedRef.current=false;setMarkups(paths);};
+  const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;clearedRef.current=false;redraw();};
 
   const redraw=useCallback(()=>{const c=markupRef.current;if(!c)return;const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));},[]);
 
@@ -176,7 +175,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const t=prompt("Enter note:");
       if(t){
         const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};
-        clearedRef.current=false;const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
+        clearedRef.current=false;const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
       }
       drawingRef.current=false;
     }
@@ -217,7 +216,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="cloud")p={tool:"cloud",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="rect")p={tool:"rect",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
-    if(p){clearedRef.current=false;const u=[...pathsRef.current,p];setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
+    if(p){clearedRef.current=false;const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
     curPath.current=[];
   };
 
@@ -266,7 +265,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const handleSave=async()=>{
     setSaving(true);
     const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
-    await api.saveMarkups(drawing.id,markups,page,cw,ch);
+    await api.saveMarkups(drawing.id,pathsRef.current,page,cw,ch);
     allMarkupsRef.current={...allMarkupsRef.current,[page]:markups};
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
@@ -449,8 +448,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>{const u=markups.slice(0,-1);setMarkups(u);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={async()=>{if(!window.confirm("Clear all markup?"))return;clearedRef.current=true;setMarkups([]);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={btnGhost}>🗑</button>
+        <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
+        <button onClick={async()=>{if(!window.confirm("Clear all markup?"))return;clearedRef.current=true;pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
