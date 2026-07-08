@@ -102,7 +102,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const redraw=useCallback(()=>{
     const c=markupRef.current;if(!c)return;
     const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
-    pathsRef.current.forEach(p=>drawPath(ctx,p,1));
+pathsRef.current.forEach(p=>drawPath(ctx,p,zoom));
   },[]);
 
   function drawPath(ctx,p,scale){
@@ -238,11 +238,16 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     }catch(e){alert("Error: "+e.message);}
   };
 
-  const handleSave=async()=>{
+const handleSave=async()=>{
     setSaving(true);
-    const cw=markupRef.current?.width||0;
-    const ch=markupRef.current?.height||0;
-    await api.saveMarkups(drawing.id,markups,page,cw,ch);
+    const cw=Math.round((markupRef.current?.width||0)/zoom);
+    const ch=Math.round((markupRef.current?.height||0)/zoom);
+    const normalizedMarkups=markups.map(p=>({
+      ...p,
+      pts:p.pts.map(pt=>({x:pt.x/zoom,y:pt.y/zoom})),
+      width:p.width/zoom
+    }));
+    await api.saveMarkups(drawing.id,normalizedMarkups,page,cw,ch);
     setAllMarkups(prev=>({...prev,[page]:markups}));
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
