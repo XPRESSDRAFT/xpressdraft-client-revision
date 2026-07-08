@@ -42,6 +42,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
   const pathsRef=useRef([]);
+  const renderTaskRef=useRef(null);
   const isTeam=user.role==="team"||user.role==="admin";
 
   useEffect(()=>{
@@ -73,6 +74,10 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   useEffect(()=>{
     if(!pdfDoc)return;
+    if(renderTaskRef.current){
+      renderTaskRef.current.cancel();
+      renderTaskRef.current=null;
+    }
     pdfDoc.getPage(page).then(pg=>{
       const wrap=wrapRef.current;if(!wrap)return;
       const vp0=pg.getViewport({scale:1});
@@ -80,10 +85,15 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const vp=pg.getViewport({scale});
       canvasRef.current.width=vp.width;canvasRef.current.height=vp.height;
       markupRef.current.width=vp.width;markupRef.current.height=vp.height;
-      pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp}).promise.then(()=>{
+      const task=pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp});
+      renderTaskRef.current=task;
+      task.promise.then(()=>{
+        renderTaskRef.current=null;
         const c=markupRef.current;if(!c)return;
         const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
         pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));
+      }).catch(err=>{
+        if(err?.name!=="RenderingCancelledException")console.error(err);
       });
     });
   },[pdfDoc,page,zoom]);
