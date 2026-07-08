@@ -92,12 +92,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     pathsRef.current=markups;
   },[markups]);
 
-  useEffect(()=>{
-    const paths=allMarkups[page]||[];
+  const loadPage=(p)=>{
+    const paths=allMarkups[p]||[];
     pathsRef.current=paths;
     setMarkups(paths);
-    setTimeout(redraw,0);
-  },[page]);
+  };
 
   const redraw=useCallback(()=>{
     const c=markupRef.current;if(!c)return;
@@ -449,7 +448,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <button onClick={()=>setZoom(z=>Math.min(3,z+0.1))} style={btnGhost}>+</button>
         <button onClick={()=>setZoom(1)} style={{...btnGhost,fontSize:11}}>Fit</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        {totalPages>1&&<><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
+        {totalPages>1&&<><button onClick={()=>{const np=Math.max(1,page-1);setPage(np);loadPage(np);}} disabled={page===1} style={btnGhost}>&#8249;</button><span style={{fontSize:12,color:B.black2}}>pg {page}/{totalPages}</span><button onClick={()=>{const np=Math.min(totalPages,page+1);setPage(np);loadPage(np);}} disabled={page===totalPages} style={btnGhost}>&#8250;</button></>}
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
       </div>
