@@ -33,7 +33,7 @@ services:
     name: xpressdraft-frontend
     runtime: static
     rootDir: frontend
-    buildCommand: npm install && npm run build
+   buildCommand: npm install && npm run build && echo "bust"
     staticPublishPath: build
     envVars:
       - key: REACT_APP_API_URL
