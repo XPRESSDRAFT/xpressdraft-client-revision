@@ -39,6 +39,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [showExportDialog,setShowExportDialog]=useState(false);
   const [exporting,setExporting]=useState(false);
   const [showClearConfirm,setShowClearConfirm]=useState(false);
+  const [selectedPathId,setSelectedPathId]=useState(null);
   const drawingRef=useRef(false);
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
@@ -104,7 +105,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;redraw();};
 
-  const redraw=useCallback(()=>{const c=markupRef.current;if(!c)return;const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);pathsRef.current.forEach(p=>drawPath(ctx,p,c.width,c.height));},[]);
+  const redraw=useCallback(()=>{const c=markupRef.current;if(!c)return;const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);pathsRef.current.forEach(p=>{if(p.id===selectedPathId){ctx.save();ctx.shadowColor="#E24B4A";ctx.shadowBlur=8;drawPath(ctx,p,c.width,c.height);ctx.restore();}else{drawPath(ctx,p,c.width,c.height);}});},[selectedPathId]);
 
   function drawPath(ctx,p,cw,ch){
     cw=cw||ctx.canvas.width;ch=ch||ctx.canvas.height;
@@ -147,6 +148,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     ctx.closePath();ctx.stroke();
   }
 
+  function hitTest(p,nx,ny){const pad=0.015;if(p.tool==="rect"){return nx>=Math.min(p.pts[0].x,p.pts[1].x)-pad&&nx<=Math.max(p.pts[0].x,p.pts[1].x)+pad&&ny>=Math.min(p.pts[0].y,p.pts[1].y)-pad&&ny<=Math.max(p.pts[0].y,p.pts[1].y)+pad;}if(p.tool==="arrow"||p.tool==="cloud"){return Math.abs(nx-(p.pts[0].x+p.pts[1].x)/2)<0.08&&Math.abs(ny-(p.pts[0].y+p.pts[1].y)/2)<0.08;}if(p.tool==="textlabel"){return Math.abs(nx-p.pts[0].x)<0.08&&Math.abs(ny-p.pts[0].y)<0.04;}return p.pts.some(pt=>Math.abs(nx-pt.x)<pad&&Math.abs(ny-pt.y)<pad);}
+
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const getNorm=e=>{const r=markupRef.current.getBoundingClientRect();const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;return{x:(e.clientX-r.left)/cw,y:(e.clientY-r.top)/ch};};
 
@@ -168,7 +171,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});
       return;
     }
-    if(tool==="select")return;
+    if(tool==="select"){const nx=(e.clientX-markupRef.current.getBoundingClientRect().left)/markupRef.current.width;const ny=(e.clientY-markupRef.current.getBoundingClientRect().top)/markupRef.current.height;const hit=pathsRef.current.slice().reverse().find(p=>hitTest(p,nx,ny));setSelectedPathId(hit?hit.id:null);return;}
     drawingRef.current=true;
     const norm=getNorm(e);
     startXY.current=norm;curPath.current=[norm];
@@ -220,6 +223,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     if(p){const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
     curPath.current=[];
   };
+
+  const deleteSelectedPath=()=>{const u=pathsRef.current.filter(p=>p.id!==selectedPathId);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};setSelectedPathId(null);redraw();};
 
   const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
@@ -438,7 +443,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         </div>
       )}
       <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        {[["select","ESC","Select"],["pen","Pen","Pen"],["hl","Hi","Highlight"],["arrow","->","Arrow"],["cloud","Cld","Cloud"],["rect","[ ]","Rect"],["text","T","Text"],["comment","Pin","Pin"],["erase","Del","Erase"]].map(([id,ic,title])=>(
+        {[["select","ESC","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
             style={{padding:"5px 8px",border:"1px solid "+(tool===id?B.orange:B.tone1),borderRadius:6,background:tool===id?"#FEF3E8":B.white,color:tool===id?B.orange:B.black1,cursor:"pointer",fontSize:14,fontFamily:"Manrope,sans-serif",fontWeight:tool===id?600:400}}>
             {ic}
@@ -449,8 +454,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>Undo</button>
-        <button onClick={()=>setShowClearConfirm(true)} style={btnGhost}>Clear</button>
+        <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
+        <button onClick={()=>setShowClearConfirm(true)} style={btnGhost}>🗑</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
@@ -476,6 +481,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*(markupRef.current?.width||1),top:pendingPin.fy*(markupRef.current?.height||1),transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>+</div>}
+                {selectedPathId&&(()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return null;const cw=markupRef.current?.width||1,ch=markupRef.current?.height||1;return <div key="del-btn" style={{position:"absolute",left:sel.pts[0].x*cw,top:sel.pts[0].y*ch,transform:"translate(4px,-24px)",zIndex:20,pointerEvents:"all"}}><button onClick={deleteSelectedPath} style={{background:"#E24B4A",color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Delete</button></div>;})()}
                 {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
                   const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
@@ -515,6 +521,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
                       {c.status==="confirmed"&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#EAF3DE",color:"#2E5C10",fontWeight:500}}>Confirmed</span>}
                     </div>
                     {c.author?.id===user?.id&&c.status!=="confirmed"&&<div style={{display:"flex",gap:6,marginTop:6}}>
+                      <button onClick={e=>{e.stopPropagation();if(!window.confirm||window.confirm("Delete pin?"))setComments(comments.filter(x=>x.id!==c.id));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid #E24B4A",borderRadius:4,background:"#fff",cursor:"pointer",color:"#8B2020",fontFamily:"Manrope,sans-serif"}}>Delete pin</button>
                       <button onClick={e=>{e.stopPropagation();const t=prompt("Edit comment:",c.text);if(t&&t.trim())setComments(comments.map(x=>x.id===c.id?{...x,text:t.trim()}:x));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid "+B.tone1,borderRadius:4,background:B.white,cursor:"pointer",color:B.black2,fontFamily:"Manrope,sans-serif"}}>Edit</button>
                       <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete this comment?"))setComments(comments.filter(x=>x.id!==c.id));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid #E24B4A",borderRadius:4,background:B.white,cursor:"pointer",color:"#8B2020",fontFamily:"Manrope,sans-serif"}}>Delete</button>
                     </div>}
