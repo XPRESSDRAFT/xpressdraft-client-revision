@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";// v2
 import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from "react-router-dom";
 import * as api from "./api";
 import DrawingView from "./DrawingView";
