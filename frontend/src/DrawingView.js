@@ -438,7 +438,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         </div>
       )}
       <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        {[["select","ESC","Select"],["pen","✏","Pen"],["hl","🖊","Highlight"],["arrow","↗","Arrow"],["cloud","☁","Cloud"],["rect","▭","Rect"],["text","T","Text"],["comment","📍","Pin"],["erase","⌫","Erase"]].map(([id,ic,title])=>(
+        {[["select","ESC","Select"],["pen","Pen","Pen"],["hl","Hi","Highlight"],["arrow","->","Arrow"],["cloud","Cld","Cloud"],["rect","[ ]","Rect"],["text","T","Text"],["comment","Pin","Pin"],["erase","Del","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
             style={{padding:"5px 8px",border:"1px solid "+(tool===id?B.orange:B.tone1),borderRadius:6,background:tool===id?"#FEF3E8":B.white,color:tool===id?B.orange:B.black1,cursor:"pointer",fontSize:14,fontFamily:"Manrope,sans-serif",fontWeight:tool===id?600:400}}>
             {ic}
@@ -449,8 +449,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <input type="range" min="1" max="12" value={strokeW} onChange={e=>setStrokeW(+e.target.value)} style={{width:60}}/>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
-        <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>↩</button>
-        <button onClick={()=>setShowClearConfirm(true)} style={btnGhost}>🗑</button>
+        <button onClick={()=>{const u=pathsRef.current.slice(0,-1);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}} style={btnGhost}>Undo</button>
+        <button onClick={()=>setShowClearConfirm(true)} style={btnGhost}>Clear</button>
         <div style={{width:1,height:22,background:B.tone1,margin:"0 2px"}}/>
         <button onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))} style={btnGhost}>-</button>
         <span style={{fontSize:11,color:B.black2,minWidth:36,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
