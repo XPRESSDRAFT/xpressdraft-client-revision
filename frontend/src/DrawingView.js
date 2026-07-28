@@ -38,6 +38,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [exportNum,setExportNum]=useState((project.markup_export_count||0)+1);
   const [showExportDialog,setShowExportDialog]=useState(false);
   const [exporting,setExporting]=useState(false);
+  const [canvasSize,setCanvasSize]=useState({w:1,h:1});
   const [showClearConfirm,setShowClearConfirm]=useState(false);
   const [selectedPathId,setSelectedPathId]=useState(null);
   const drawingRef=useRef(false);
@@ -481,14 +482,13 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
               onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;}}/>
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
-                {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*(markupRef.current?.width||1),top:pendingPin.fy*(markupRef.current?.height||1),transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>+</div>}
-                {selectedPathId&&(()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return null;const cw=markupRef.current?.width||1,ch=markupRef.current?.height||1;return <div key="del-btn" style={{position:"absolute",left:sel.pts[0].x*cw,top:sel.pts[0].y*ch,transform:"translate(4px,-24px)",zIndex:20,pointerEvents:"all"}}><button onClick={deleteSelectedPath} style={{background:"#E24B4A",color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Delete</button></div>;})()}
+                {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*canvasSize.w,top:pendingPin.fy*canvasSize.h,transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>+</div>}
+                {selectedPathId&&(()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return null;return <div key="del-btn" style={{position:"absolute",left:sel.pts[0].x*canvasSize.w,top:sel.pts[0].y*canvasSize.h,transform:"translate(4px,-24px)",zIndex:20,pointerEvents:"all"}}><button onClick={deleteSelectedPath} style={{background:"#E24B4A",color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Delete</button></div>;})()}
                 {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c)=>{
                   const ct=CTYPES[c.type]||CTYPES.note;
-                  const w=markupRef.current?.width||1,h=markupRef.current?.height||1;
                   const gi=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
                   return <div key={c.id} onClick={()=>{setSelectedCid(c.id);setReplyTarget(c.id);}}
-                    style={{position:"absolute",left:c.pin_x*w,top:c.pin_y*h,transform:"translate(-50%,-50%) scale("+(selectedCid===c.id?1.3:1)+")",
+                    style={{position:"absolute",left:c.pin_x*canvasSize.w,top:c.pin_y*canvasSize.h,transform:"translate(-50%,-50%) scale("+(selectedCid===c.id?1.3:1)+")",
                       width:22,height:22,borderRadius:"50%",background:ct.dot,border:"2px solid white",
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",
                       cursor:"pointer",zIndex:10,transition:"transform 0.15s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)",pointerEvents:"all"}}>{gi+1}</div>;
