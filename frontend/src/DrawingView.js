@@ -224,6 +224,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     curPath.current=[];
   };
 
+  useEffect(()=>{redraw();},[selectedPathId]);
   const deleteSelectedPath=()=>{const u=pathsRef.current.filter(p=>p.id!==selectedPathId);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};setSelectedPathId(null);redraw();};
 
   const addComment=async()=>{
