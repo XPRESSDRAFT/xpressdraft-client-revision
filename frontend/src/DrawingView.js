@@ -520,7 +520,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
                       <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:ct.bg,color:ct.color,fontWeight:500}}>{ct.label}</span>
                       {c.status==="confirmed"&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#EAF3DE",color:"#2E5C10",fontWeight:500}}>Confirmed</span>}
                     </div>
-                    {c.author?.id===user?.id&&c.status!=="confirmed"&&<div style={{display:"flex",gap:6,marginTop:6}}>
+            {(c.author?.id===user?.id||user?.role==="admin")&&c.status!=="confirmed"&&<div style={{display:"flex",gap:6,marginTop:6}}>
                       <button onClick={e=>{e.stopPropagation();const t=prompt("Edit comment:",c.text);if(t&&t.trim())setComments(comments.map(x=>x.id===c.id?{...x,text:t.trim()}:x));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid "+B.tone1,borderRadius:4,background:B.white,cursor:"pointer",color:B.black2,fontFamily:"Manrope,sans-serif"}}>Edit</button>
                       <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete this comment?"))setComments(comments.filter(x=>x.id!==c.id));}} style={{fontSize:10,padding:"2px 8px",border:"1px solid #E24B4A",borderRadius:4,background:B.white,cursor:"pointer",color:"#8B2020",fontFamily:"Manrope,sans-serif"}}>Delete</button>
                     </div>}
