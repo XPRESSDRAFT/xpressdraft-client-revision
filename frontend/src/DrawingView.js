@@ -416,7 +416,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
   };
 
-  const COLORS=["#EA672F","#E24B4A","#378ADD","#639922","#7F77DD","#2A2B29","#CC0000","#006600"];
+  const COLORS=["#EA672F","#E24B4A","#378ADD","#639922","#7F77DD","#2A2B29","#CC0000","#006600","#006600"];
   const CTYPES={issue:{label:"Issue",bg:"#FCEBEB",color:"#8B2020",dot:"#E24B4A"},info:{label:"Question",bg:"#FEF3E8",color:"#7A3D0A",dot:B.orange},ok:{label:"Approved",bg:"#EAF3DE",color:"#2E5C10",dot:"#639922"},note:{label:"Note",bg:"#F0EEF8",color:"#3D3580",dot:"#7F77DD"}};
   const cursorMap={pen:"crosshair",hl:"crosshair",arrow:"crosshair",cloud:"crosshair",rect:"crosshair",text:"text",comment:"copy",select:"default",erase:"cell"};
 
