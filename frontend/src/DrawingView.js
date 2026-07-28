@@ -88,7 +88,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const vp=pg.getViewport({scale});
       canvasRef.current.width=vp.width;canvasRef.current.height=vp.height;
       markupRef.current.width=vp.width;markupRef.current.height=vp.height;
-      const task=pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp});
+      setCanvasSize({w:vp.width,h:vp.height});const task=pg.render({canvasContext:canvasRef.current.getContext("2d"),viewport:vp});
       renderTaskRef.current=task;
       task.promise.then(()=>{
         renderTaskRef.current=null;
