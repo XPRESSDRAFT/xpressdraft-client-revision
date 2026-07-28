@@ -272,7 +272,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setSaving(true);
     const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
     await api.saveMarkups(drawing.id,pathsRef.current,page,cw,ch);
-    allMarkupsRef.current={...allMarkupsRef.current,[page]:markups};
+  allMarkupsRef.current={...allMarkupsRef.current,[page]:pathsRef.current};
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
     setSaving(false);
   };
