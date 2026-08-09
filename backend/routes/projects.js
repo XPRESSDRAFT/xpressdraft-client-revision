@@ -8,13 +8,20 @@ router.get('/', auth, async (req, res) => {
     let query = supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
+        contractor:users!projects_contractor_id_fkey(id, name, email),
+        assigned:users!projects_assigned_to_fkey(id, name, email),
         drawings(id, name, uploaded_at, comments(id, status, replies(id))),
         revisions(id, stage, revision_number, is_bonus, confirmed_at)`)
       .order('created_at', { ascending: false });
 
     if (req.user.role === 'client') {
       query = query.eq('client_id', req.user.id);
+    } else if (req.user.role === 'contractor') {
+      query = query.eq('contractor_id', req.user.id);
+    } else if (req.user.role === 'team') {
+      query = query.eq('assigned_to', req.user.id);
     }
+    // admin sees all
 
     const { data, error } = await query;
     if (error) throw error;
@@ -31,9 +38,12 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-router.post('/', auth, teamOnly, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
-    const { name, description, stage, clientId, jobNumber, siteAddress } = req.body;
+    if (req.user.role !== 'admin' && req.user.role !== 'team') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo } = req.body;
     if (!name || !stage) return res.status(400).json({ error: 'Name and stage required' });
     if (!['preliminary', 'working_drawings'].includes(stage)) {
       return res.status(400).json({ error: 'Stage must be preliminary or working_drawings' });
@@ -46,9 +56,13 @@ router.post('/', auth, teamOnly, async (req, res) => {
         client_id: clientId || null,
         job_number: jobNumber || null,
         site_address: siteAddress || null,
+        contractor_id: contractorId || null,
+        assigned_to: assignedTo || null,
         created_by: req.user.id
       })
-      .select(`*, client:users!projects_client_id_fkey(id, name, email)`)
+      .select(`*, client:users!projects_client_id_fkey(id, name, email),
+        contractor:users!projects_contractor_id_fkey(id, name, email),
+        assigned:users!projects_assigned_to_fkey(id, name, email)`)
       .single();
 
     if (error) throw error;
@@ -64,13 +78,22 @@ router.get('/:id', auth, async (req, res) => {
     const { data, error } = await supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
+        contractor:users!projects_contractor_id_fkey(id, name, email),
+        assigned:users!projects_assigned_to_fkey(id, name, email),
         drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role)))),
         revisions(*)`)
       .eq('id', req.params.id)
       .single();
 
     if (error || !data) return res.status(404).json({ error: 'Project not found' });
+
     if (req.user.role === 'client' && data.client_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (req.user.role === 'contractor' && data.contractor_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (req.user.role === 'team' && data.assigned_to !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -81,9 +104,12 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-router.put('/:id', auth, teamOnly, async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
-    const { name, description, stage, clientId, jobNumber, siteAddress } = req.body;
+    if (req.user.role !== 'admin' && req.user.role !== 'team') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo } = req.body;
     const updates = { updated_at: new Date().toISOString() };
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
@@ -91,10 +117,14 @@ router.put('/:id', auth, teamOnly, async (req, res) => {
     if (clientId !== undefined) updates.client_id = clientId;
     if (jobNumber !== undefined) updates.job_number = jobNumber;
     if (siteAddress !== undefined) updates.site_address = siteAddress;
+    if (contractorId !== undefined) updates.contractor_id = contractorId;
+    if (assignedTo !== undefined) updates.assigned_to = assignedTo;
 
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
-      .select(`*, client:users!projects_client_id_fkey(id, name, email)`).single();
+      .select(`*, client:users!projects_client_id_fkey(id, name, email),
+        contractor:users!projects_contractor_id_fkey(id, name, email),
+        assigned:users!projects_assigned_to_fkey(id, name, email)`).single();
     if (error) throw error;
     res.json({ project: data });
   } catch (err) {
@@ -102,8 +132,11 @@ router.put('/:id', auth, teamOnly, async (req, res) => {
   }
 });
 
-router.delete('/:id', auth, teamOnly, async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can delete projects' });
+    }
     const { error } = await supabase.from('projects').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ message: 'Project deleted' });
@@ -112,8 +145,11 @@ router.delete('/:id', auth, teamOnly, async (req, res) => {
   }
 });
 
-router.post('/:id/bonus-revision', auth, teamOnly, async (req, res) => {
+router.post('/:id/bonus-revision', auth, async (req, res) => {
   try {
+    if (req.user.role !== 'admin' && req.user.role !== 'team') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const { data: project } = await supabase
       .from('projects').select('*').eq('id', req.params.id).single();
     if (!project) return res.status(404).json({ error: 'Project not found' });
