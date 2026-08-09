@@ -9,7 +9,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendEmail(to, subject, html) {
   const { error } = await resend.emails.send({
-    from: 'Xpress Draft <onboarding@resend.dev>',
+    from: 'Xpress Draft <noreply@send.xpressdraft.com.au>',
     to,
     subject,
     html,
