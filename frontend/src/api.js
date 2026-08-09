@@ -72,9 +72,9 @@ export const getComments = (drawingId) =>
 export const addComment = (drawingId, data) =>
   fetch(`${API}/api/drawings/${drawingId}/comments`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle);
 
-export const addReply = (drawingId, commentId, text) =>
+export const addReply = (drawingId, commentId, text, isPrivate = false) =>
   fetch(`${API}/api/drawings/${drawingId}/comments/${commentId}/replies`, {
-    method: 'POST', headers: headers(), body: JSON.stringify({ text })
+    method: 'POST', headers: headers(), body: JSON.stringify({ text, isPrivate })
   }).then(handle);
 
 export const improveReply = (drawingId, commentId, draft) =>
