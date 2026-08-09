@@ -15,7 +15,14 @@ router.get('/', auth, async (req, res) => {
       .eq('drawing_id', req.params.drawingId)
       .order('created_at', { ascending: true });
     if (error) throw error;
-    res.json({ comments: data });
+
+    const isClient = req.user.role === 'client';
+    const comments = data.map(c => ({
+      ...c,
+      replies: (c.replies || []).filter(r => !isClient || !r.is_private)
+    }));
+
+    res.json({ comments });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
@@ -23,13 +30,19 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, async (req, res) => {
   try {
-const { text, type, pinX, pinY, page } = req.body;
+    const { text, type, pinX, pinY, page } = req.body;
     if (!text || !type) return res.status(400).json({ error: 'Text and type required' });
 
     const { data, error } = await supabase
       .from('comments')
-.insert({ drawing_id: req.params.drawingId, author_id: req.user.id,
-        text, type, pin_x: pinX, pin_y: pinY, status: 'open', page: page||1 })
+      .insert({
+        drawing_id: req.params.drawingId,
+        author_id: req.user.id,
+        text, type,
+        pin_x: pinX, pin_y: pinY,
+        status: 'open',
+        page: page || 1
+      })
       .select(`*, author:users(id, name, role)`).single();
 
     if (error) throw error;
@@ -41,28 +54,49 @@ const { text, type, pinX, pinY, page } = req.body;
 
 router.post('/:commentId/replies', auth, async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, isPrivate = false } = req.body;
     if (!text) return res.status(400).json({ error: 'Text required' });
+
+    const canBePrivate = req.user.role === 'contractor' || req.user.role === 'team' || req.user.role === 'admin';
+    const privateFlag = canBePrivate && isPrivate;
+
+    const authorName = req.user.role === 'contractor' ? 'Xpress Draft' : req.user.name;
 
     const { data, error } = await supabase
       .from('replies')
-      .insert({ comment_id: req.params.commentId, author_id: req.user.id, text })
+      .insert({
+        comment_id: req.params.commentId,
+        author_id: req.user.id,
+        text,
+        is_private: privateFlag
+      })
       .select(`*, author:users(id, name, role)`).single();
 
     if (error) throw error;
 
-    if (req.user.role === 'team') {
+    const reply = {
+      ...data,
+      author: {
+        ...data.author,
+        name: req.user.role === 'contractor' ? 'Xpress Draft' : data.author.name
+      }
+    };
+
+    if (req.user.role === 'team' || req.user.role === 'admin' || req.user.role === 'contractor') {
       await supabase.from('comments').update({ status: 'interpreted' }).eq('id', req.params.commentId);
     }
 
-    res.status(201).json({ reply: data });
+    res.status(201).json({ reply });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add reply' });
   }
 });
 
-router.post('/:commentId/improve-reply', auth, teamOnly, async (req, res) => {
+router.post('/:commentId/improve-reply', auth, async (req, res) => {
   try {
+    if (!['team', 'admin', 'contractor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const { draft } = req.body;
     if (!draft) return res.status(400).json({ error: 'Draft required' });
 
@@ -87,9 +121,12 @@ Return ONLY the improved message text, no preamble.`,
   }
 });
 
-router.post('/:commentId/interpret', auth, teamOnly, async (req, res) => {
+router.post('/:commentId/interpret', auth, async (req, res) => {
   try {
-    const { commentId, drawingId } = req.params;
+    if (!['team', 'admin', 'contractor'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const { commentId } = req.params;
     const { markupDescription } = req.body;
 
     const { data: comment } = await supabase
