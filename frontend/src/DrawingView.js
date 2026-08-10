@@ -375,7 +375,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
             cc.replies.forEach(r=>{
               if(cy>500){pdf.addPage();cy=30;}
               pdf.setTextColor(234,103,47);pdf.setFontSize(9);
-              pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":""+":",52,cy);
+pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":"  ,52,cy);
               pdf.setTextColor(66,69,60);const rl=pdf.splitTextToSize(r.text,cpw-100);
               pdf.text(rl,52,cy+10);cy+=10+(rl.length*11)+6;
             });
