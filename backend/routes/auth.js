@@ -44,7 +44,7 @@ const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
           <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:32px">
             Hi ${user.name},<br/><br/>
             Click the button below to access your plan review portal.
-            This link expires in 15 minutes.
+This link expires in 48 hours.
           </p>
           <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
             Access my plans →
