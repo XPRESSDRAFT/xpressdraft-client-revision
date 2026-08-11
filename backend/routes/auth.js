@@ -34,11 +34,8 @@ router.post('/magic-link', async (req, res) => {
 
     const loginUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
 
-    console.log('Sending magic link to:', user.email);
-    console.log('Login URL:', loginUrl);
-
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'Xpress Draft <onboarding@resend.dev>',
+      from: 'Xpress Draft <noreply@xpressdraft.com.au>',
       to: user.email,
       subject: 'Your Xpress Draft login link',
       html: `
@@ -64,7 +61,6 @@ router.post('/magic-link', async (req, res) => {
       return res.status(500).json({ error: 'Failed to send login link' });
     }
 
-    console.log('Email sent successfully:', emailData);
     res.json({ message: 'If this email is registered, a login link has been sent.' });
   } catch (err) {
     console.error('Magic link error:', err.message, err.stack);
