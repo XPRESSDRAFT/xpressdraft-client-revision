@@ -114,7 +114,7 @@ function ProjectsPage({user,onLogout}){
 
   useEffect(()=>{
     api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);});
-    if(user.role==="team"||user.role==="admin")api.getUsers().then(d=>setClients(d.users));
+if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClients(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
 
   const createProject=async()=>{
