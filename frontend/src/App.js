@@ -114,8 +114,6 @@ function ProjectsPage({user,onLogout}){
   const [editClientId,setEditClientId]=useState("");
   const [editContractorId,setEditContractorId]=useState("");
   const [editAssignedTo,setEditAssignedTo]=useState("");
-  const [editContractorId,setEditContractorId]=useState("");
-  const [editAssignedTo,setEditAssignedTo]=useState("");
   const fileRefs=useRef({});
 
   useEffect(()=>{
