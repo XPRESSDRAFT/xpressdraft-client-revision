@@ -106,10 +106,6 @@ function ProjectsPage({user,onLogout}){
   const [teamMembers,setTeamMembers]=useState([]);
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
-  const [editingProject,setEditingProject]=useState(null);
-  const [editName,setEditName]=useState("");
-  const [editJobNum,setEditJobNum]=useState("");
-  const [editAddress,setEditAddress]=useState("");
  const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
