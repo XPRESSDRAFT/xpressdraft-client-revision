@@ -8,8 +8,6 @@ router.get('/', auth, async (req, res) => {
     let query = supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!contractor_id(id, name, email),
-        assigned:users!assigned_to(id, name, email),
         drawings(id, name, uploaded_at, comments(id, status, replies(id))),
         revisions(id, stage, revision_number, is_bonus, confirmed_at)`)
       .order('created_at', { ascending: false });
@@ -59,9 +57,7 @@ router.post('/', auth, async (req, res) => {
         assigned_to: assignedTo || null,
         created_by: req.user.id
       })
-      .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!contractor_id(id, name, email),
-        assigned:users!assigned_to(id, name, email)`)
+      .select(`*, client:users!projects_client_id_fkey(id, name, email)`)
       .single();
 
     if (error) throw error;
@@ -77,8 +73,6 @@ router.get('/:id', auth, async (req, res) => {
     const { data, error } = await supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!contractor_id(id, name, email),
-        assigned:users!assigned_to(id, name, email),
         drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role)))),
         revisions(*)`)
       .eq('id', req.params.id)
@@ -121,9 +115,7 @@ router.put('/:id', auth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
-      .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!contractor_id(id, name, email),
-        assigned:users!assigned_to(id, name, email)`).single();
+      .select(`*, client:users!projects_client_id_fkey(id, name, email)`).single();
     if (error) throw error;
     res.json({ project: data });
   } catch (err) {
