@@ -102,6 +102,14 @@ function ProjectsPage({user,onLogout}){
   const [newClientId,setNewClientId]=useState("");
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
+  const [editingProject,setEditingProject]=useState(null);
+  const [editName,setEditName]=useState("");
+  const [editJobNum,setEditJobNum]=useState("");
+  const [editAddress,setEditAddress]=useState("");
+  const [editStage,setEditStage]=useState("");
+  const [editClientId,setEditClientId]=useState("");
+  const [editContractorId,setEditContractorId]=useState("");
+  const [editAssignedTo,setEditAssignedTo]=useState("");
   const fileRefs=useRef({});
 
   useEffect(()=>{
@@ -138,6 +146,28 @@ function ProjectsPage({user,onLogout}){
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
 
+  const openEdit=(p)=>{
+    setEditingProject(p);
+    setEditName(p.site_address||p.name||"");
+    setEditJobNum(p.job_number||"");
+    setEditAddress(p.site_address||"");
+    setEditStage(p.stage||"preliminary");
+    setEditClientId(p.client_id||"");
+    setEditContractorId(p.contractor_id||"");
+    setEditAssignedTo(p.assigned_to||"");
+  };
+
+  const saveEdit=async()=>{
+    if(!editingProject)return;
+    await api.updateProject(editingProject.id,{
+      name:editName,siteAddress:editAddress,jobNumber:editJobNum,
+      stage:editStage,clientId:editClientId||null,
+      contractorId:editContractorId||null,assignedTo:editAssignedTo||null
+    });
+    const d=await api.getProjects();setProjects(d.projects);
+    setEditingProject(null);
+  };
+
   if(showAdmin)return<AdminPage user={user} onBack={()=>setShowAdmin(false)}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
 
@@ -145,6 +175,45 @@ function ProjectsPage({user,onLogout}){
 
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
+      {editingProject&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:B.white,borderRadius:12,padding:28,width:480,fontFamily:"Manrope,sans-serif",maxHeight:"90vh",overflowY:"auto"}}>
+            <h3 style={{margin:"0 0 16px",color:B.black,fontSize:16}}>Edit Project</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <input style={inputSt} placeholder="Job number" value={editJobNum} onChange={e=>setEditJobNum(e.target.value)}/>
+              <input style={inputSt} placeholder="Project name" value={editName} onChange={e=>setEditName(e.target.value)}/>
+            </div>
+            <input style={{...inputSt,marginBottom:8}} placeholder="Site address" value={editAddress} onChange={e=>setEditAddress(e.target.value)}/>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              {[["preliminary","Preliminary"],["working_drawings","Working Drawings"]].map(([v,l])=>(
+                <div key={v} onClick={()=>setEditStage(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(editStage===v?B.orange:B.tone1),background:editStage===v?"#FEF3E8":B.white,color:editStage===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:editStage===v?600:400}}>{l}</div>
+              ))}
+            </div>
+            {clients.length>0&&(
+              <select style={{...inputSt,marginBottom:8}} value={editClientId} onChange={e=>setEditClientId(e.target.value)}>
+                <option value="">No client assigned</option>
+                {clients.map(c=><option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
+              </select>
+            )}
+            {teamMembers.length>0&&(
+              <select style={{...inputSt,marginBottom:8}} value={editAssignedTo} onChange={e=>setEditAssignedTo(e.target.value)}>
+                <option value="">No team member assigned</option>
+                {teamMembers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            {contractors.length>0&&(
+              <select style={{...inputSt,marginBottom:16}} value={editContractorId} onChange={e=>setEditContractorId(e.target.value)}>
+                <option value="">No contractor assigned</option>
+                {contractors.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditingProject(null)} style={btnGhost}>Cancel</button>
+              <button onClick={saveEdit} style={btnPrimary}>Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
         <XPDLogo size={32} variant="white"/>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
@@ -203,7 +272,7 @@ function ProjectsPage({user,onLogout}){
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
                       {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444444",color:B.cream,fontWeight:600}}>{p.job_number}</span>}
                       <span style={{fontWeight:600,fontSize:15,color:B.black}}>{p.site_address||p.name}</span>
-                      {isTeam&&<button onClick={()=>editProjectName(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:B.black2,padding:"0 4px"}}>✏</button>}
+                      {isTeam&&<button onClick={()=>openEdit(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:B.black2,padding:"0 4px"}}>✏</button>}
                       <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:"1px solid "+B.tone1,fontWeight:500}}>
                         {rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}
                       </span>
