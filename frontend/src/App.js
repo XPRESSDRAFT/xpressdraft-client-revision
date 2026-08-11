@@ -172,22 +172,6 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
     setEditingProject(null);
   };
 
-  const openEdit=(p)=>{
-    setEditingProject(p);
-    setEditName(p.site_address||p.name||"");
-    setEditJobNum(p.job_number||"");
-    setEditAddress(p.site_address||"");
-    setEditStage(p.stage||"preliminary");
-    setEditClientId(p.client_id||"");
-    setEditContractorId(p.contractor_id||"");
-    setEditAssignedTo(p.assigned_to||"");
-  };
-  const saveEdit=async()=>{
-    if(!editingProject)return;
-    await api.updateProject(editingProject.id,{name:editName,siteAddress:editAddress,jobNumber:editJobNum,stage:editStage,clientId:editClientId||null,contractorId:editContractorId||null,assignedTo:editAssignedTo||null});
-    const d=await api.getProjects();setProjects(d.projects);
-    setEditingProject(null);
-  };
   if(showAdmin)return<AdminPage user={user} onBack={()=>setShowAdmin(false)}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
 
