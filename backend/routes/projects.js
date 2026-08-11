@@ -8,8 +8,8 @@ router.get('/', auth, async (req, res) => {
     let query = supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!projects_contractor_id_fkey(id, name, email),
-        assigned:users!projects_assigned_to_fkey(id, name, email),
+        contractor:users!contractor_id(id, name, email),
+        assigned:users!assigned_to(id, name, email),
         drawings(id, name, uploaded_at, comments(id, status, replies(id))),
         revisions(id, stage, revision_number, is_bonus, confirmed_at)`)
       .order('created_at', { ascending: false });
@@ -21,7 +21,6 @@ router.get('/', auth, async (req, res) => {
     } else if (req.user.role === 'team') {
       query = query.eq('assigned_to', req.user.id);
     }
-    // admin sees all
 
     const { data, error } = await query;
     if (error) throw error;
@@ -61,8 +60,8 @@ router.post('/', auth, async (req, res) => {
         created_by: req.user.id
       })
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!projects_contractor_id_fkey(id, name, email),
-        assigned:users!projects_assigned_to_fkey(id, name, email)`)
+        contractor:users!contractor_id(id, name, email),
+        assigned:users!assigned_to(id, name, email)`)
       .single();
 
     if (error) throw error;
@@ -78,8 +77,8 @@ router.get('/:id', auth, async (req, res) => {
     const { data, error } = await supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!projects_contractor_id_fkey(id, name, email),
-        assigned:users!projects_assigned_to_fkey(id, name, email),
+        contractor:users!contractor_id(id, name, email),
+        assigned:users!assigned_to(id, name, email),
         drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role)))),
         revisions(*)`)
       .eq('id', req.params.id)
@@ -123,8 +122,8 @@ router.put('/:id', auth, async (req, res) => {
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        contractor:users!projects_contractor_id_fkey(id, name, email),
-        assigned:users!projects_assigned_to_fkey(id, name, email)`).single();
+        contractor:users!contractor_id(id, name, email),
+        assigned:users!assigned_to(id, name, email)`).single();
     if (error) throw error;
     res.json({ project: data });
   } catch (err) {
