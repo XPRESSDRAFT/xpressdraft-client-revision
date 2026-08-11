@@ -24,7 +24,7 @@ router.post('/magic-link', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     await supabase.from('magic_links').insert({
       email: user.email,
