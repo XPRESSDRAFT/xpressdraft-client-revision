@@ -13,12 +13,13 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'xpressdraft-api' }));
 
-app.use('/api/auth',    require('./routes/auth'));
-app.use('/api/users',   require('./routes/users'));
+app.use('/api/auth',     require('./routes/auth'));
+app.use('/api/users',    require('./routes/users'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/projects/:projectId/drawings', require('./routes/drawings'));
 app.use('/api/drawings/:drawingId/comments', require('./routes/comments'));
 app.use('/api/drawings/:drawingId/markups',  require('./routes/markups'));
+app.use('/api/monday',   require('./routes/monday'));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
