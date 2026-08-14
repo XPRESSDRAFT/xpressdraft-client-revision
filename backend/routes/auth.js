@@ -8,6 +8,31 @@ const { auth } = require('../middleware/auth');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const MONDAY_GROUP_AWAITING_CLIENT = 'group_mkzqbpx4';
+const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID;
+
+async function moveToAwaitingClient(mondayItemId) {
+  try {
+    const mutation = `mutation {
+      move_item_to_group(
+        item_id: ${mondayItemId},
+        group_id: "${MONDAY_GROUP_AWAITING_CLIENT}"
+      ) { id }
+    }`;
+    await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': process.env.MONDAY_API_TOKEN
+      },
+      body: JSON.stringify({ query: mutation })
+    });
+    console.log(`Moved Monday item ${mondayItemId} to AWAITING CLIENT`);
+  } catch (err) {
+    console.error('Monday move group error:', err);
+  }
+}
+
 router.post('/magic-link', async (req, res) => {
   try {
     const { email } = req.body;
@@ -24,7 +49,7 @@ router.post('/magic-link', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     await supabase.from('magic_links').insert({
       email: user.email,
@@ -44,7 +69,7 @@ const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
           <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:32px">
             Hi ${user.name},<br/><br/>
             Click the button below to access your plan review portal.
-This link expires in 48 hours.
+            This link expires in 48 hours.
           </p>
           <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
             Access my plans →
@@ -92,6 +117,22 @@ router.post('/verify', async (req, res) => {
       .select('*')
       .eq('email', link.email)
       .single();
+
+    // If client is logging in, move their project to AWAITING CLIENT in Monday
+    if (user.role === 'client') {
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('monday_item_id')
+        .eq('client_id', user.id)
+        .not('monday_item_id', 'is', null)
+        .eq('locked', false)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (projects && projects.length > 0 && projects[0].monday_item_id) {
+        await moveToAwaitingClient(projects[0].monday_item_id);
+      }
+    }
 
     const jwtToken = jwt.sign(
       { userId: user.id, role: user.role },
