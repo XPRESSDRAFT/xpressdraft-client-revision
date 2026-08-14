@@ -142,6 +142,13 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
     setProjects(projects.filter(p=>p.id!==id));
   };
 
+  const deleteDrawing=async(projectId,drawingId,e)=>{
+    e.stopPropagation();
+    if(!window.confirm("Delete this drawing?"))return;
+    await api.deleteDrawing(projectId,drawingId);
+    const d=await api.getProjects();setProjects(d.projects);
+  };
+
   const editProjectName=async(p)=>{
     const current=p.site_address||p.name;
     const newVal=prompt("Edit project name / site address:",current);
@@ -304,8 +311,10 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
                 {p.drawings?.length>0&&(
                   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
                     {p.drawings.map(d=>(
-                      <span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1}}>
-                        {d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}</span>
+                      <span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1,display:"inline-flex",alignItems:"center",gap:6}}>
+                        {d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}
+                        {isTeam&&<button onClick={e=>deleteDrawing(p.id,d.id,e)} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"0",lineHeight:1}}>✕</button>}
+                      </span>
                     ))}
                   </div>
                 )}
@@ -485,7 +494,10 @@ function ProjectDetail({project,user,onBack}){
               style={{padding:"9px 12px",cursor:"pointer",background:activeDrawing?.id===d.id?"#FEF3E8":"transparent",
                 borderLeft:activeDrawing?.id===d.id?"3px solid "+B.orange:"3px solid transparent",
                 borderBottom:"1px solid "+B.cream}}>
-              <div style={{fontSize:12,fontWeight:activeDrawing?.id===d.id?600:400,color:activeDrawing?.id===d.id?B.orange:B.black}}>{d.name}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontSize:12,fontWeight:activeDrawing?.id===d.id?600:400,color:activeDrawing?.id===d.id?B.orange:B.black,flex:1}}>{d.name}</div>
+                {isTeam&&<button onClick={e=>{e.stopPropagation();if(!window.confirm("Delete this drawing?"))return;api.deleteDrawing(project.id,d.id).then(()=>setDrawings(drawings.filter(x=>x.id!==d.id)));}} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"2px 4px"}}>✕</button>}
+              </div>
               {d.comments?.length>0&&<div style={{fontSize:10,color:B.black2,marginTop:2}}>{d.comments.length} comments</div>}
             </div>
           ))}
