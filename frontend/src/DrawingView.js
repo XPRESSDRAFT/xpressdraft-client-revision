@@ -30,6 +30,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [replyTarget,setReplyTarget]=useState(null);
   const [improving,setImproving]=useState(false);
   const [interpreting,setInterpreting]=useState(null);
+  const [retryCounts,setRetryCounts]=useState({});
   const [saving,setSaving]=useState(false);
   const [pdfReady,setPdfReady]=useState(!!window.pdfjsLib);
   const [pdfDoc,setPdfDoc]=useState(null);
@@ -78,10 +79,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   useEffect(()=>{
     if(!pdfDoc)return;
-    if(renderTaskRef.current){
-      renderTaskRef.current.cancel();
-      renderTaskRef.current=null;
-    }
+    if(renderTaskRef.current){renderTaskRef.current.cancel();renderTaskRef.current=null;}
     pdfDoc.getPage(page).then(pg=>{
       const wrap=wrapRef.current;if(!wrap)return;
       const vp0=pg.getViewport({scale:1});
@@ -97,13 +95,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
         const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
         const paths=allMarkupsRef.current[page]||[];
         paths.forEach(p=>drawPath(ctx,p,c.width,c.height));
-      }).catch(err=>{
-        if(err?.name!=="RenderingCancelledException")console.error(err);
-      });
+      }).catch(err=>{if(err?.name!=="RenderingCancelledException")console.error(err);});
     });
   },[pdfDoc,page,zoom]);
-
-  // pathsRef is managed directly - not via useEffect to avoid stale state restoration
 
   const loadPage=(p)=>{const paths=allMarkupsRef.current[p]||[];pathsRef.current=paths;redraw();};
 
@@ -113,25 +107,17 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     cw=cw||ctx.canvas.width;ch=ch||ctx.canvas.height;
     ctx.save();ctx.strokeStyle=p.color;ctx.lineWidth=p.width*cw;ctx.lineCap="round";ctx.lineJoin="round";
     if(p.tool==="hl"){ctx.globalAlpha=0.35;}
-    if(p.tool==="textlabel"){
-      ctx.fillStyle=p.color;ctx.font="14px Manrope,sans-serif";
-      ctx.fillText(p.text,p.pts[0].x*cw,p.pts[0].y*ch);
-    } else if(p.tool==="arrow"){
-      drawArrow(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);
-    } else if(p.tool==="cloud"){
-      drawCloud(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);
-    } else if(p.tool==="rect"){
-      ctx.strokeRect(p.pts[0].x*cw,p.pts[0].y*ch,(p.pts[1].x-p.pts[0].x)*cw,(p.pts[1].y-p.pts[0].y)*ch);
-    } else {
-      ctx.beginPath();p.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*cw,pt.y*ch):ctx.moveTo(pt.x*cw,pt.y*ch));ctx.stroke();
-    }
+    if(p.tool==="textlabel"){ctx.fillStyle=p.color;ctx.font="14px Manrope,sans-serif";ctx.fillText(p.text,p.pts[0].x*cw,p.pts[0].y*ch);}
+    else if(p.tool==="arrow"){drawArrow(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);}
+    else if(p.tool==="cloud"){drawCloud(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);}
+    else if(p.tool==="rect"){ctx.strokeRect(p.pts[0].x*cw,p.pts[0].y*ch,(p.pts[1].x-p.pts[0].x)*cw,(p.pts[1].y-p.pts[0].y)*ch);}
+    else{ctx.beginPath();p.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*cw,pt.y*ch):ctx.moveTo(pt.x*cw,pt.y*ch));ctx.stroke();}
     ctx.restore();
   }
 
   function drawArrow(ctx,x1,y1,x2,y2,col,w){
     const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(w*4,12);
-    ctx.strokeStyle=col;ctx.lineWidth=w;
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.strokeStyle=col;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
     ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x2,y2);
     ctx.lineTo(x2-hw*Math.cos(ang-0.4),y2-hw*Math.sin(ang-0.4));
     ctx.lineTo(x2-hw*Math.cos(ang+0.4),y2-hw*Math.sin(ang+0.4));
@@ -142,11 +128,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     const cx=(x1+x2)/2,cy=(y1+y2)/2,rw=Math.abs(x2-x1)/2,rh=Math.abs(y2-y1)/2;
     if(rw<5||rh<5)return;
     ctx.strokeStyle=col;ctx.lineWidth=w||2;ctx.beginPath();
-    for(let a=0;a<=Math.PI*2;a+=0.15){
-      const bx=cx+rw*Math.cos(a)+6*Math.cos(a*5);
-      const by=cy+rh*Math.sin(a)+6*Math.sin(a*5);
-      a===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);
-    }
+    for(let a=0;a<=Math.PI*2;a+=0.15){const bx=cx+rw*Math.cos(a)+6*Math.cos(a*5);const by=cy+rh*Math.sin(a)+6*Math.sin(a*5);a===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);}
     ctx.closePath();ctx.stroke();
   }
 
@@ -155,69 +137,35 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const getXY=e=>{const r=markupRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const getNorm=e=>{const r=markupRef.current.getBoundingClientRect();const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;return{x:(e.clientX-r.left)/cw,y:(e.clientY-r.top)/ch};};
 
-  const onWheel=useCallback(e=>{
-    e.preventDefault();
-    setZoom(z=>Math.min(3,Math.max(0.3,+(z+(e.deltaY>0?-0.1:0.1)).toFixed(1))));
-  },[]);
+  const onWheel=useCallback(e=>{e.preventDefault();setZoom(z=>Math.min(3,Math.max(0.3,+(z+(e.deltaY>0?-0.1:0.1)).toFixed(1))));},[]);
 
   useEffect(()=>{
-    const el=wrapRef.current;
-    if(!el)return;
+    const el=wrapRef.current;if(!el)return;
     el.addEventListener('wheel',onWheel,{passive:false});
     return()=>el.removeEventListener('wheel',onWheel);
   },[onWheel]);
 
   const onMouseDown=e=>{
-    if(tool==="comment"){
-      const r=markupRef.current.getBoundingClientRect();
-      setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});
-      return;
-    }
+    if(tool==="comment"){const r=markupRef.current.getBoundingClientRect();setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});return;}
     if(tool==="select"){const nx=(e.clientX-markupRef.current.getBoundingClientRect().left)/markupRef.current.width;const ny=(e.clientY-markupRef.current.getBoundingClientRect().top)/markupRef.current.height;const hit=pathsRef.current.slice().reverse().find(p=>hitTest(p,nx,ny));setSelectedPathId(hit?hit.id:null);return;}
-    drawingRef.current=true;
-    const norm=getNorm(e);
-    startXY.current=norm;curPath.current=[norm];
-    if(tool==="text"){
-      const t=prompt("Enter note:");
-      if(t){
-        const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};
-        const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();
-      }
-      drawingRef.current=false;
-    }
+    drawingRef.current=true;const norm=getNorm(e);startXY.current=norm;curPath.current=[norm];
+    if(tool==="text"){const t=prompt("Enter note:");if(t){const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}drawingRef.current=false;}
   };
 
   const onMouseMove=e=>{
-    if(!drawingRef.current)return;
-    const norm=getNorm(e);
-    const{x,y}=getXY(e);
-    const ctx=markupRef.current.getContext("2d");
-    const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;
+    if(!drawingRef.current)return;const norm=getNorm(e);const{x,y}=getXY(e);
+    const ctx=markupRef.current.getContext("2d");const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;
     if(tool==="pen"||tool==="hl"){
-      curPath.current.push(norm);ctx.save();
-      if(tool==="hl"){ctx.globalAlpha=0.35;}
-      ctx.strokeStyle=color;
-      ctx.lineWidth=tool==="hl"?strokeW*6:strokeW;
-      ctx.lineCap="round";ctx.lineJoin="round";
-      const pts=curPath.current;
-      const prev=pts[pts.length-2];
+      curPath.current.push(norm);ctx.save();if(tool==="hl")ctx.globalAlpha=0.35;
+      ctx.strokeStyle=color;ctx.lineWidth=tool==="hl"?strokeW*6:strokeW;ctx.lineCap="round";ctx.lineJoin="round";
+      const pts=curPath.current;const prev=pts[pts.length-2];
       ctx.beginPath();ctx.moveTo(prev.x*cw,prev.y*ch);ctx.lineTo(norm.x*cw,norm.y*ch);ctx.stroke();ctx.restore();
     } else if(tool==="erase"){ctx.clearRect(x-12,y-12,24,24);}
-    else{
-      redraw();ctx.save();ctx.strokeStyle=color;ctx.lineWidth=strokeW;ctx.lineCap="round";
-      const sx=startXY.current.x*cw,sy=startXY.current.y*ch;
-      if(tool==="arrow")drawArrow(ctx,sx,sy,x,y,color,strokeW);
-      else if(tool==="cloud")drawCloud(ctx,sx,sy,x,y,color,strokeW);
-      else if(tool==="rect")ctx.strokeRect(sx,sy,x-sx,y-sy);
-      ctx.restore();
-    }
+    else{redraw();ctx.save();ctx.strokeStyle=color;ctx.lineWidth=strokeW;ctx.lineCap="round";const sx=startXY.current.x*cw,sy=startXY.current.y*ch;if(tool==="arrow")drawArrow(ctx,sx,sy,x,y,color,strokeW);else if(tool==="cloud")drawCloud(ctx,sx,sy,x,y,color,strokeW);else if(tool==="rect")ctx.strokeRect(sx,sy,x-sx,y-sy);ctx.restore();}
   };
 
   const onMouseUp=e=>{
-    if(!drawingRef.current)return;drawingRef.current=false;
-    const norm=getNorm(e);
-    const cw=markupRef.current.width||1;
-    let p;
+    if(!drawingRef.current)return;drawingRef.current=false;const norm=getNorm(e);const cw=markupRef.current.width||1;let p;
     if(tool==="pen"||tool==="hl")p={tool,color,width:(tool==="hl"?strokeW*6:strokeW)/cw,pts:[...curPath.current],id:Date.now()};
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
     else if(tool==="cloud")p={tool:"cloud",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
@@ -257,10 +205,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setInterpreting(null);
   };
 
+  const rejectInterpretation=async(commentId)=>{const retries=retryCounts[commentId]||0;if(retries>=1){setComments(comments.map(c=>c.id===commentId?{...c,status:"escalated"}:c));return;}setRetryCounts(prev=>({...prev,[commentId]:retries+1}));setInterpreting(commentId);const c=comments.find(c=>c.id===commentId);const prevInterp=c?.replies?.filter(r=>r.is_ai_interpreted).map(r=>r.text).join(" | ")||"";const d=await api.interpretMarkup(drawing.id,commentId,c?.text+" [Previous attempt was rejected: "+prevInterp+"]");setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft (AI)",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));setInterpreting(null);};
+
   const confirmRevision=async(commentId)=>{
     try{
-      const rs=revisionSummary;
-      const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
+      const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
       const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
       const confirmed=window.confirm("Confirm Revision\n\n"+stage+" Stage - This will use Revision "+nextRev+" of "+total+".\n\nProceed?");
       if(!confirmed)return;
@@ -272,12 +221,28 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   };
 
   const handleSave=async()=>{
-    setSaving(true);
-    const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
+    setSaving(true);const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
     await api.saveMarkups(drawing.id,pathsRef.current,page,cw,ch);
     allMarkupsRef.current={...allMarkupsRef.current,[page]:pathsRef.current};
-    setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
-    setSaving(false);
+    setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));setSaving(false);
+  };
+
+  const generateMarkupPdf=async()=>{
+    if(!window.jspdf){const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";document.head.appendChild(s);await new Promise(r=>{s.onload=r;});}
+    const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:"landscape",unit:"pt"});let fp=true;
+    const allPins=comments.filter(c=>c.pin_x!=null).sort((a,b)=>(a.page||1)-(b.page||1));
+    for(let p=1;p<=totalPages;p++){
+      const pg=await pdfDoc.getPage(p);const vp=pg.getViewport({scale:2});
+      const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;const ctx=c.getContext("2d");
+      await pg.render({canvasContext:ctx,viewport:vp}).promise;
+      (allMarkupsRef.current[p]||[]).forEach(path=>{ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*vp.width;ctx.lineCap="round";ctx.lineJoin="round";if(path.tool==="hl")ctx.globalAlpha=0.35;if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);}else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);}else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));ctx.stroke();}ctx.restore();});
+      allPins.filter(cc=>(cc.page||1)===p).forEach(cc=>{const gi=allPins.indexOf(cc);const x=cc.pin_x*vp.width,y=cc.pin_y*vp.height;ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 18px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(gi+1,x,y);});
+      const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();const ratio=Math.min(pw/vp.width,ph/vp.height);
+      if(!fp)pdf.addPage();pdf.addImage(c.toDataURL("image/jpeg",0.9),"JPEG",0,0,vp.width*ratio,vp.height*ratio);fp=false;
+    }
+    pdf.addPage();const pw=pdf.internal.pageSize.getWidth();pdf.setFontSize(16);pdf.setTextColor(42,43,41);pdf.text("Markup Summary",40,40);pdf.setFontSize(11);pdf.setTextColor(94,99,91);pdf.text([project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name,40,58);
+    let sy=76;allPins.forEach((cc,i)=>{if(sy>480){pdf.addPage();sy=40;}pdf.setFontSize(11);pdf.setTextColor(226,75,74);pdf.text("Pin "+(i+1)+" (Page "+(cc.page||1)+")",40,sy);pdf.setTextColor(42,43,41);pdf.setFontSize(10);const ls=pdf.splitTextToSize(cc.text,pw-80);pdf.text(ls,40,sy+13);sy+=13+(ls.length*12)+10;});
+    return {pdf,allPins};
   };
 
   const handleExportPDF=()=>setShowExportDialog(true);
@@ -285,134 +250,21 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const doExport=async()=>{
     if(!pdfDoc){alert("No drawing loaded.");return;}
     setExporting(true);setShowExportDialog(false);
-    if(!window.jspdf){
-      const script=document.createElement("script");
-      script.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      document.head.appendChild(script);
-      await new Promise(r=>{script.onload=r;});
-    }
-    const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:"landscape",unit:"pt"});
-    let firstPage=true;
-    const allPins=comments.filter(c=>c.pin_x!=null).sort((a,b)=>(a.page||1)-(b.page||1));
-    for(let p=1;p<=totalPages;p++){
-      const pg=await pdfDoc.getPage(p);
-      const vp=pg.getViewport({scale:2});
-      const c=document.createElement("canvas");
-      c.width=vp.width;c.height=vp.height;
-      const ctx=c.getContext("2d");
-      await pg.render({canvasContext:ctx,viewport:vp}).promise;
-      const pagePaths=allMarkupsRef.current[p]||[];
-      pagePaths.forEach(path=>{
-        ctx.save();ctx.strokeStyle=path.color;
-        ctx.lineWidth=path.width*vp.width;
-        ctx.lineCap="round";ctx.lineJoin="round";
-        if(path.tool==="hl"){ctx.globalAlpha=0.35;}
-        if(path.tool==="textlabel"){
-          ctx.fillStyle=path.color;ctx.font="28px sans-serif";
-          ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);
-        } else if(path.tool==="arrow"){
-          const x1=path.pts[0].x*vp.width,y1=path.pts[0].y*vp.height;
-          const x2=path.pts[1].x*vp.width,y2=path.pts[1].y*vp.height;
-          const ang=Math.atan2(y2-y1,x2-x1),hw=Math.max(path.width*vp.width*4,16);
-          ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-          ctx.fillStyle=path.color;ctx.beginPath();ctx.moveTo(x2,y2);
-          ctx.lineTo(x2-hw*Math.cos(ang-0.4),y2-hw*Math.sin(ang-0.4));
-          ctx.lineTo(x2-hw*Math.cos(ang+0.4),y2-hw*Math.sin(ang+0.4));
-          ctx.closePath();ctx.fill();
-        } else if(path.tool==="cloud"){
-          const cx=(path.pts[0].x+path.pts[1].x)/2*vp.width;
-          const cy=(path.pts[0].y+path.pts[1].y)/2*vp.height;
-          const rw=Math.abs(path.pts[1].x-path.pts[0].x)/2*vp.width;
-          const rh=Math.abs(path.pts[1].y-path.pts[0].y)/2*vp.height;
-          if(rw>5&&rh>5){
-            ctx.beginPath();
-            for(let a=0;a<=Math.PI*2;a+=0.15){
-              const bx=cx+rw*Math.cos(a)+8*Math.cos(a*5);
-              const by=cy+rh*Math.sin(a)+8*Math.sin(a*5);
-              a===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);
-            }
-            ctx.closePath();ctx.stroke();
-          }
-        } else if(path.tool==="rect"){
-          ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);
-        } else {
-          ctx.beginPath();
-          path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));
-          ctx.stroke();
-        }
-        ctx.restore();
-      });
-      const pageComments=allPins.filter(cc=>(cc.page||1)===p);
-      pageComments.forEach(cc=>{
-        const gi=allPins.indexOf(cc);
-        const x=cc.pin_x*vp.width,y=cc.pin_y*vp.height;
-        ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();
-        ctx.fillStyle="#fff";ctx.font="bold 18px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
-        ctx.fillText(gi+1,x,y);
-      });
-      const imgData=c.toDataURL("image/jpeg",0.9);
-      const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
-      const ratio=Math.min(pw/vp.width,ph/vp.height);
-      if(!firstPage)pdf.addPage();
-      pdf.addImage(imgData,"JPEG",0,0,vp.width*ratio,vp.height*ratio);
-      firstPage=false;
-      if(pageComments.length>0){
-        pdf.addPage();const cpw=pdf.internal.pageSize.getWidth();
-        pdf.setFontSize(14);pdf.setTextColor(42,43,41);pdf.text("Comments - Page "+p,40,30);
-        pdf.setDrawColor(210,202,196);pdf.line(40,36,cpw-40,36);
-        let cy=50;
-        pageComments.forEach((cc)=>{
-          if(cy>500){pdf.addPage();cy=30;}
-          const gi=allPins.indexOf(cc);
-          pdf.setFontSize(11);pdf.setTextColor(226,75,74);
-          const tl=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
-          pdf.text("Pin "+(gi+1)+" - "+tl,40,cy);
-          pdf.setTextColor(42,43,41);pdf.setFontSize(10);
-          const lines=pdf.splitTextToSize(cc.text,cpw-80);
-          pdf.text(lines,40,cy+13);cy+=13+(lines.length*12)+10;
-          if(cc.replies&&cc.replies.length>0){
-            cc.replies.forEach(r=>{
-              if(cy>500){pdf.addPage();cy=30;}
-              pdf.setTextColor(234,103,47);pdf.setFontSize(9);
-pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":"  ,52,cy);
-              pdf.setTextColor(66,69,60);const rl=pdf.splitTextToSize(r.text,cpw-100);
-              pdf.text(rl,52,cy+10);cy+=10+(rl.length*11)+6;
-            });
-          }
-          pdf.setDrawColor(242,234,229);pdf.line(40,cy,cpw-40,cy);cy+=8;
-        });
-      }
-    }
-    pdf.addPage();const pw=pdf.internal.pageSize.getWidth();
-    pdf.setFontSize(20);pdf.setTextColor(42,43,41);pdf.text("Markup Summary",40,40);
-    pdf.setFontSize(12);pdf.setTextColor(94,99,91);
-    const proj=[project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name;
-    pdf.text(proj,40,58);pdf.text("Exported: "+new Date().toLocaleDateString("en-AU")+" | Markup "+exportNum,40,72);
-    pdf.setDrawColor(210,202,196);pdf.line(40,80,pw-40,80);
-    let y=96;
-    allPins.forEach((cc,i)=>{
-      if(y>480){pdf.addPage();y=40;}
-      pdf.setFontSize(11);pdf.setTextColor(226,75,74);
-      const tl=(cc.type||"note").charAt(0).toUpperCase()+(cc.type||"note").slice(1);
-      pdf.text("Pin "+(i+1)+" - "+tl+" (Page "+(cc.page||1)+")",40,y);
-      pdf.setTextColor(42,43,41);pdf.setFontSize(10);
-      const lines=pdf.splitTextToSize(cc.text,pw-80);
-      pdf.text(lines,40,y+14);y+=14+(lines.length*13)+10;
-      pdf.setDrawColor(242,234,229);pdf.line(40,y,pw-40,y);y+=8;
-    });
-    const jobNum=(project.job_number||"").replace(/\s+/g,"-");
-    const addr=(project.site_address||project.name||"drawing").replace(/\s+/g,"-").replace(/[^a-zA-Z0-9-]/g,"");
-    pdf.save(jobNum+(addr?"-"+addr:"")+"-Markup-"+exportNum+".pdf");
-    await api.incrementMarkupExport(project.id,exportNum);
-    setExportNum(exportNum+1);setExporting(false);
+    try{
+      const {pdf,allPins}=await generateMarkupPdf();
+      const jobNum=(project.job_number||"").replace(/\s+/g,"-");
+      const addr=(project.site_address||project.name||"drawing").replace(/\s+/g,"-").replace(/[^a-zA-Z0-9-]/g,"");
+      pdf.save(jobNum+(addr?"-"+addr:"")+"-Markup-"+exportNum+".pdf");
+      await api.incrementMarkupExport(project.id,exportNum);
+      setExportNum(exportNum+1);
+    }catch(e){console.error("Export error:",e);}
+    setExporting(false);
   };
 
   const submitAllChanges=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
-    const rs=revisionSummary;
-    const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
+    const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
     const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nYou have "+openComments.length+" comment"+(openComments.length!==1?"s":"")+" to submit.\n\nProceed?");
     if(!confirmed)return;
@@ -421,6 +273,12 @@ pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":"  ,52,cy);
       try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
     }
     if(lastSummary)onRevisionConfirmed(lastSummary);
+    // Generate PDF and upload to Monday
+    try{
+      const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
+      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
+      await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
+    }catch(e){console.error("PDF upload error:",e);}
     alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
   };
 
@@ -536,20 +394,18 @@ pdf.text((r.author?.name||"Team")+(r.is_ai_interpreted?" (AI)":"")+":"  ,52,cy);
                   ))}
                   {isSelected&&user.role!=="admin"&&user.role!=="team"&&user.role!=="contractor"&&c.status==="interpreted"&&(
                     <div style={{marginLeft:12,marginTop:8,padding:12,background:"#FEF3E8",border:"1px solid "+B.orange,borderRadius:8}}>
-                      <p style={{fontSize:12,color:B.black1,margin:"0 0 6px",fontWeight:600}}>This will use a revision</p>
-                      <p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>
-                        {revisionSummary?.stageLabel==="PR"?"Preliminary":"Working Drawings"} Stage - Revision {(revisionSummary?.used||0)+1} of {revisionSummary?.totalAllowed||2}
-                      </p>
+                      <p style={{fontSize:12,color:B.black1,margin:"0 0 4px",fontWeight:600}}>Did we understand your request correctly?</p>
+                      <p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>{revisionSummary?.stageLabel==="PR"?"Preliminary":"Working Drawings"} Stage - Revision {(revisionSummary?.used||0)+1} of {revisionSummary?.totalAllowed||2}</p>
                       <div style={{display:"flex",gap:8}}>
-                        <button onClick={()=>setSelectedCid(null)} style={btnGhost}>Cancel</button>
-                        <button onClick={()=>confirmRevision(c.id)} style={btnPrimary}>Confirm and Send</button>
+                        <button onClick={()=>rejectInterpretation(c.id)} disabled={interpreting===c.id} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>{interpreting===c.id?"Retrying...":"Not quite"}</button>
+                        <button onClick={()=>confirmRevision(c.id)} style={btnPrimary}>Yes, correct</button>
                       </div>
                     </div>
                   )}
+                  {isSelected&&user.role!=="admin"&&user.role!=="team"&&user.role!=="contractor"&&c.status==="escalated"&&(<div style={{marginLeft:12,marginTop:8,padding:12,background:"#FCEBEB",border:"1px solid #E24B4A",borderRadius:8}}><p style={{fontSize:12,color:"#8B2020",margin:"0 0 6px",fontWeight:600}}>We need to discuss this with you</p><p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>Our AI could not interpret your request correctly. Please contact us directly.</p><a href="mailto:info@xpressdraft.com.au" style={{...btnPrimary,textDecoration:"none",fontSize:11}}>Contact Xpress Draft</a></div>)}
                   {isSelected&&isTeam&&c.status==="open"&&(
                     <div style={{marginLeft:12,marginTop:6}}>
-                      <button onClick={()=>interpret(c.id)} disabled={interpreting===c.id}
-                        style={{...btnPrimary,width:"100%",justifyContent:"center",marginBottom:6}}>
+                      <button onClick={()=>interpret(c.id)} disabled={interpreting===c.id} style={{...btnPrimary,width:"100%",justifyContent:"center",marginBottom:6}}>
                         {interpreting===c.id?"Interpreting...":"Interpret with AI"}
                       </button>
                     </div>
