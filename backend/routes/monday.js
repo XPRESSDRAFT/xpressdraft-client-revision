@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
 const { Resend } = require('resend');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const { auth } = require('../middleware/auth');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -422,6 +425,94 @@ router.post('/stripe-webhook', async (req, res) => {
 
   } catch (err) {
     console.error('Stripe webhook error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Client submits changes - upload PDF to Monday and notify team
+router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
+  try {
+    const { projectId, commentSummary } = req.body;
+    const pdfBuffer = req.file?.buffer;
+
+    if (!pdfBuffer) return res.status(400).json({ error: 'PDF required' });
+
+    // Get project and client details
+    const { data: project } = await supabase
+      .from('projects')
+      .select('*, client:users!projects_client_id_fkey(id, name, email)')
+      .eq('id', projectId)
+      .single();
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project.monday_item_id) return res.json({ ok: true, message: 'No Monday item linked' });
+
+    const clientName = project.client?.name || 'Client';
+    const jobNumber = project.job_number || project.name;
+    const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
+
+    // Upload PDF to Monday Instructions column
+    const formData = new FormData();
+    formData.append('query', `mutation { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: "file") { id } }`);
+    formData.append('variables[file]', new Blob([pdfBuffer], { type: 'application/pdf' }), fileName);
+
+    await fetch('https://api.monday.com/v2/file', {
+      method: 'POST',
+      headers: { 'Authorization': process.env.MONDAY_API_TOKEN },
+      body: formData
+    });
+
+    console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
+
+    // Move item to TO BE REVIEWED group
+    await mondayApi(`mutation {
+      move_item_to_group(
+        item_id: ${project.monday_item_id},
+        group_id: "group_title"
+      ) { id }
+    }`);
+
+    // Reset DELIVERY STATUS to blank
+    await mondayApi(`mutation {
+      change_column_value(
+        board_id: ${process.env.MONDAY_BOARD_ID},
+        item_id: ${project.monday_item_id},
+        column_id: "${COL.deliveryStatus}",
+        value: "{\"label\":\"\"}"
+      ) { id }
+    }`);
+
+    // Send notification email to team
+    const resendClient = new Resend(process.env.RESEND_API_KEY);
+    await resendClient.emails.send({
+      from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
+      to: 'info@xpressdraft.com.au',
+      subject: `Client markup submitted — ${jobNumber}`,
+      html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Client markup submitted</h2>
+        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
+          <strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.
+        </p>
+        <p style="color:#5E635B;font-size:14px;line-height:1.6;">
+          The marked-up PDF has been uploaded to Monday under the Instructions column.
+          The item has been moved to <strong>TO BE REVIEWED</strong>.
+        </p>
+        ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin-top:16px;border-left:3px solid #EA672F;">
+          <p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">Comments:</p>
+          <p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p>
+        </div>` : ''}
+        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}" 
+           style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:24px;">
+          View in Monday →
+        </a>
+      </div>`
+    });
+
+    console.log(`Submission notification sent for ${jobNumber}`);
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.error('Submit markup error:', err);
     res.status(500).json({ error: err.message });
   }
 });
