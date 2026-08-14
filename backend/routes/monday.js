@@ -286,13 +286,28 @@ router.post('/webhook', async (req, res) => {
       emailHtml = paymentEmailHtml(clientName, partialPayment, false);
       await supabase.from('projects').update({ stripe_payment_link: partialPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
 
-    } else if (isWD && finalPayment) {
-      // WD stage - requires final payment
+    } else if (isWD && finalPayment && !isFirstIssue) {
+      // WD stage non-first-issue - requires final payment
       deliveryType = 'wd_final_payment';
       paymentLink = finalPayment;
       emailSubject = 'Your working drawings are ready — Xpress Draft';
       emailHtml = paymentEmailHtml(clientName, finalPayment, true);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
+
+    } else if (isWD && finalPayment && isFirstIssue) {
+      // WD first issue with payment
+      deliveryType = 'wd_first_payment';
+      paymentLink = finalPayment;
+      emailSubject = 'Your working drawings are ready — Xpress Draft';
+      emailHtml = paymentEmailHtml(clientName, finalPayment, true);
+      await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
+
+    } else if (isWD && isFirstIssue && !finalPayment) {
+      // WD first issue - free (gift project)
+      deliveryType = 'wd_first_free';
+      emailSubject = 'Your working drawings are ready for review — Xpress Draft';
+      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl);
+      await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
 
     } else if (!isFirstIssue && variationLink) {
       // Variation payment required
