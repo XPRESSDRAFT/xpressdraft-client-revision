@@ -327,6 +327,11 @@ function AdminPage({user,onBack}){
   const [newRole,setNewRole]=useState("client");
   const [sendInvite,setSendInvite]=useState(true);
   const [msg,setMsg]=useState("");
+  const [editingUser,setEditingUser]=useState(null);
+  const [editUserName,setEditUserName]=useState("");
+  const [editUserEmail,setEditUserEmail]=useState("");
+  const [editUserRole,setEditUserRole]=useState("");
+  const [editUserPhone,setEditUserPhone]=useState("");
 
   useEffect(()=>{api.getUsers().then(d=>{setUsers(d.users);setLoading(false);});},[]);
 
@@ -353,8 +358,31 @@ function AdminPage({user,onBack}){
     catch(e){setMsg("Failed to resend invite");}
   };
 
+  const openEditUser=(u)=>{
+    setEditingUser(u);
+    setEditUserName(u.name||"");
+    setEditUserEmail(u.email||"");
+    setEditUserRole(u.role||"client");
+    setEditUserPhone(u.phone||"");
+  };
+
+  const saveEditUser=async()=>{
+    if(!editingUser)return;
+    try{
+      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+editingUser.id,{
+        method:"PUT",
+        headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},
+        body:JSON.stringify({name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone})
+      });
+      setUsers(users.map(u=>u.id===editingUser.id?{...u,name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone}:u));
+      setEditingUser(null);
+      setMsg("User updated successfully.");
+    }catch(e){setMsg("Failed to update user");}
+  };
+
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
+      {editingUser&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:28,width:440,fontFamily:"Manrope,sans-serif"}}><h3 style={{margin:"0 0 16px",color:B.black,fontSize:16}}>Edit User</h3><input style={{...inputSt,marginBottom:8}} placeholder="Full name" value={editUserName} onChange={e=>setEditUserName(e.target.value)}/><input style={{...inputSt,marginBottom:8}} placeholder="Email address" value={editUserEmail} onChange={e=>setEditUserEmail(e.target.value)}/><input style={{...inputSt,marginBottom:8}} placeholder="Phone number" value={editUserPhone} onChange={e=>setEditUserPhone(e.target.value)}/><div style={{display:"flex",gap:8,marginBottom:16}}>{[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(<div key={v} onClick={()=>setEditUserRole(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(editUserRole===v?B.orange:B.tone1),background:editUserRole===v?"#FEF3E8":B.white,color:editUserRole===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:editUserRole===v?600:400}}>{l}</div>))}</div><div style={{display:"flex",gap:8}}><button onClick={()=>setEditingUser(null)} style={btnGhost}>Cancel</button><button onClick={saveEditUser} style={btnPrimary}>Save changes</button></div></div></div>)}
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}>
         <XPDLogo size={40} variant="white"/>
         <span style={{color:B.black2,marginLeft:8}}>Admin</span>
@@ -389,16 +417,16 @@ function AdminPage({user,onBack}){
           </div>
         )}
         <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto",padding:"10px 16px",background:B.cream,borderBottom:"1px solid "+B.tone1,fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.05em"}}>
-            <span>NAME</span><span>EMAIL</span><span>ROLE</span><span></span><span></span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto",padding:"10px 16px",background:B.cream,borderBottom:"1px solid "+B.tone1,fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.05em"}}>
+            <span>NAME</span><span>EMAIL</span><span>ROLE</span><span></span><span></span><span></span>
           </div>
           {loading&&<div style={{padding:24,textAlign:"center",color:B.black2}}>Loading...</div>}
           {users.map(u=>(
-            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto",padding:"12px 16px",borderBottom:"1px solid "+B.cream,alignItems:"center"}}>
+            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto",padding:"12px 16px",borderBottom:"1px solid "+B.cream,alignItems:"center"}}>
               <span style={{fontSize:14,fontWeight:500,color:B.black}}>{u.name}</span>
               <span style={{fontSize:13,color:B.black2}}>{u.email}</span>
               <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:u.role==="admin"?"#F0EEF8":u.role==="team"?"#FEF3E8":"#EAF3DE",color:u.role==="admin"?"#3D3580":u.role==="team"?B.orange:"#2E5C10",fontWeight:600,marginRight:8}}>{u.role}</span>
-              <button onClick={()=>resendInvite(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Resend invite</button>
+              <button onClick={()=>openEditUser(u)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Edit</button><button onClick={()=>resendInvite(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Resend invite</button>
               <button onClick={()=>removeUser(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",color:"#8B2020",borderColor:"#F7C1C1"}}>Remove</button>
             </div>
           ))}
