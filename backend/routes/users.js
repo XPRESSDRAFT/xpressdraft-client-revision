@@ -122,5 +122,23 @@ router.delete('/:id', auth, teamOnly, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
+router.put('/:id', auth, teamOnly, async (req, res) => {
+  try {
+    const { name, email, role, phone } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (email !== undefined) updates.email = email.toLowerCase().trim();
+    if (role !== undefined) updates.role = role;
+    if (phone !== undefined) updates.phone = phone;
 
+    const { data, error } = await supabase
+      .from('users').update(updates).eq('id', req.params.id)
+      .select().single();
+    if (error) throw error;
+    res.json({ user: data });
+  } catch (err) {
+    console.error('Update user error:', err);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
 module.exports = router;
