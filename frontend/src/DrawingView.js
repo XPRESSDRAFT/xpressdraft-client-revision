@@ -227,7 +227,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));setSaving(false);
   };
 
-  const generateMarkupPdf=async()=>{
+const generateMarkupPdf=async()=>{
+    console.log("generateMarkupPdf called, pdfDoc:", !!pdfDoc, "totalPages:", totalPages);
     if(!window.jspdf){const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";document.head.appendChild(s);await new Promise(r=>{s.onload=r;});}
     const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:"landscape",unit:"pt"});let fp=true;
     const allPins=comments.filter(c=>c.pin_x!=null).sort((a,b)=>(a.page||1)-(b.page||1));
