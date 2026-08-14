@@ -278,7 +278,9 @@ const generateMarkupPdf=async()=>{
 try{
       console.log("Starting PDF generation for submit...");
       const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
-      console.log("PDF generated, pins:", submitPins.length, "uploading to Monday...");
+     console.log("PDF generated, pins:", submitPins.length, "uploading to Monday...");
+      console.log("API URL:", process.env.REACT_APP_API_URL||"(empty)");
+      console.log("Token:", !!localStorage.getItem("xpd_token"));
       const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
       await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
     }catch(e){console.error("PDF upload error:",e);}
