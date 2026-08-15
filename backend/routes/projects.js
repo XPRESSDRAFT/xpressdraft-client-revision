@@ -8,7 +8,7 @@ router.get('/', auth, async (req, res) => {
     let query = supabase
       .from('projects')
       .select(`*, client:users!projects_client_id_fkey(id, name, email),
-        drawings(id, name, uploaded_at, comments(id, status, replies(id))),
+drawings(id, name, file_url, uploaded_at, comments(id, status, replies(id)))
         revisions(id, stage, revision_number, is_bonus, confirmed_at)`)
       .order('created_at', { ascending: false });
 
@@ -68,7 +68,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-router.get('/:id', auth, async (req, res) => {
+drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role))))
   try {
     const { data, error } = await supabase
       .from('projects')
