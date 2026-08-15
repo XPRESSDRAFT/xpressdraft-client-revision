@@ -478,6 +478,7 @@ router.post('/approve', auth, async (req, res) => {
 router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   try {
 const { projectId, commentSummary } = req.body;
+console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO FILE');
     console.log('Submit markup for project:', projectId);
     const pdfBuffer = req.file?.buffer;
 
