@@ -477,7 +477,8 @@ router.post('/approve', auth, async (req, res) => {
 
 router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   try {
-    const { projectId, commentSummary } = req.body;
+const { projectId, commentSummary } = req.body;
+    console.log('Submit markup for project:', projectId);
     const pdfBuffer = req.file?.buffer;
 
     if (!pdfBuffer) return res.status(400).json({ error: 'PDF required' });
