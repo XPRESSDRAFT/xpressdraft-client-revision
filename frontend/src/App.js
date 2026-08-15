@@ -106,6 +106,7 @@ function ProjectsPage({user,onLogout}){
   const [teamMembers,setTeamMembers]=useState([]);
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
+  const [showHealth,setShowHealth]=useState(false);
  const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
@@ -179,6 +180,7 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
     setEditingProject(null);
   };
 
+  if(showHealth)return<SystemHealthPage onBack={()=>setShowHealth(false)}/>;
   if(showAdmin)return<AdminPage user={user} onBack={()=>setShowAdmin(false)}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
 
@@ -229,6 +231,7 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
         <XPDLogo size={32} variant="white"/>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
+          {user.role==="admin"&&<button onClick={()=>setShowHealth(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>System</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
           <button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>
@@ -444,6 +447,26 @@ function AdminPage({user,onBack}){
     </div>
   );
 }
+
+function SystemHealthPage({onBack}){
+  const [health,setHealth]=useState(null);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    fetch((process.env.REACT_APP_API_URL||"")+"/api/health/system",{
+      headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
+    }).then(r=>r.json()).then(d=>{setHealth(d);setLoading(false);}).catch(()=>setLoading(false));
+  },[]);
+
+  const Card=({title,status,items,link,linkLabel})=>(<div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:15,fontWeight:600,color:B.black}}>{title}</h3><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:status==="ok"?"#639922":status==="warn"?"#fdab3d":"#E24B4A"}}/><span style={{fontSize:12,color:B.black2}}>{status==="ok"?"Healthy":status==="warn"?"Check soon":"Action needed"}</span></div></div>{items.map((item,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<items.length-1?"1px solid "+B.cream:"none"}}><span style={{fontSize:13,color:B.black2}}>{item.label}</span><span style={{fontSize:13,fontWeight:500,color:item.warn?"#E24B4A":B.black}}>{item.value}</span></div>))}{link&&<a href={link} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:12,fontSize:12,color:B.orange,textDecoration:"none"}}>{linkLabel||"Open dashboard"} →</a>}</div>);
+
+  const supabaseItems=health?[{label:"Storage used",value:health.supabase?.storageUsed||"—"},{label:"Storage limit",value:"1 GB (free tier)"},{label:"Database rows",value:health.supabase?.rows||"—"},{label:"MAU limit",value:"50,000 (free tier)"}]:[{label:"Loading...",value:""}];
+  const resendItems=health?[{label:"Emails sent this month",value:health.resend?.sent||"—"},{label:"Monthly limit",value:"3,000 (free tier)"},{label:"Domain",value:"xpressdraft.com.au — Verified"}]:[{label:"Loading...",value:""}];
+  const renderItems=[{label:"Backend",value:"xpressdraft-api (Free)"},{label:"Frontend",value:"xpressdraft-frontend (Free)"},{label:"Cold start delay",value:"~30 seconds after inactivity"},{label:"Recommendation",value:"Upgrade to Starter ($7/mo) to remove cold starts",warn:true}];
+  const anthropicItems=[{label:"Model",value:"claude-sonnet-4-6"},{label:"Billing",value:"Pay per use"},{label:"Recommendation",value:"Set a monthly spend limit in Anthropic console"}];
+  const mondayItems=[{label:"Board ID",value:"18388615760"},{label:"Webhook",value:"Active — DELIVERY STATUS"},{label:"Recommendation",value:"Verify API access is included in your Monday plan"}];
+
+  return(<div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}><nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}><XPDLogo size={40} variant="white"/><span style={{color:B.black2,marginLeft:8,fontSize:13}}>System Health</span><button onClick={onBack} style={{marginLeft:"auto",background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Back</button></nav><div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}><div style={{marginBottom:24}}><h1 style={{fontSize:22,fontWeight:600,color:B.black,margin:"0 0 4px"}}>System Health</h1><p style={{fontSize:13,color:B.black2,margin:0}}>Monitor service limits and plan usage across all suppliers.</p></div>{loading?<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>:<><Card title="Supabase — Database & Storage" status={health?.supabase?.warn?"warn":"ok"} items={supabaseItems} link="https://supabase.com/dashboard/project/xitgnfstcfbaoxqbwxug" linkLabel="Open Supabase"/><Card title="Resend — Email" status={health?.resend?.warn?"warn":"ok"} items={resendItems} link="https://resend.com/overview" linkLabel="Open Resend"/><Card title="Render — Hosting" status="warn" items={renderItems} link="https://dashboard.render.com" linkLabel="Open Render"/><Card title="Anthropic — AI" status="ok" items={anthropicItems} link="https://console.anthropic.com" linkLabel="Open Anthropic"/><Card title="Monday.com — Job Management" status="ok" items={mondayItems} link="https://xpressdraft.monday.com" linkLabel="Open Monday"/></>}</div></div>);}
 
 function ProjectDetail({project,user,onBack}){
   const [drawings,setDrawings]=useState([]);
