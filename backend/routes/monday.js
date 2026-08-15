@@ -236,11 +236,11 @@ router.post('/webhook', async (req, res) => {
           });
 
         if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('drawings').getPublicUrl(`${project.id}/${fileName}`);
+          const { data: signedData } = await supabase.storage.from('drawings').createSignedUrl(`${project.id}/${fileName}`, 365 * 24 * 60 * 60);
           const { data: drawing } = await supabase.from('drawings').insert({
             project_id: project.id,
             name: pdfFile.name,
-            file_url: urlData.publicUrl,
+            file_url: signedData?.signedUrl,
             file_path: `${project.id}/${fileName}`
           }).select().single();
           pdfDrawingId = drawing?.id;
