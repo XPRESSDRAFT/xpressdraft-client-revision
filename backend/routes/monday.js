@@ -123,9 +123,12 @@ function firstDeliveryEmailHtml(clientName, portalUrl) {
       the Xpress Draft portal, where you can view your plans, add comments and request changes.
     </p>
     <a href="${portalUrl}" style="${btnStyle}">Review my plans →</a>
-    <p style="color:#5E635B;font-size:13px;line-height:1.6;">
+<p style="color:#5E635B;font-size:13px;line-height:1.6;">
       Your plan includes <strong>2 complimentary revisions</strong> at the Preliminary stage
       and <strong>1 revision</strong> at the Working Drawings stage.
+    </p>
+    <p style="color:#5E635B;font-size:13px;line-height:1.6;">
+      If you are happy with the drawings, you can also click the <strong>Approve drawings</strong> button directly in the portal to confirm your approval and request the final set.
     </p>
     ${APPROVAL_NOTE}
     ${footerHtml}
