@@ -507,14 +507,15 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
 
     console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
 
-    await mondayApi(`mutation {
+const moveResult = await mondayApi(`mutation {
       move_item_to_group(
         item_id: ${project.monday_item_id},
         group_id: "group_title"
       ) { id }
     }`);
+    console.log('Move result:', JSON.stringify(moveResult?.errors || moveResult?.data));
 
-await mondayApi(`mutation {
+    const statusResult = await mondayApi(`mutation {
       change_column_value(
         board_id: ${process.env.MONDAY_BOARD_ID},
         item_id: ${project.monday_item_id},
@@ -522,6 +523,10 @@ await mondayApi(`mutation {
         value: "{\\"index\\":5}"
       ) { id }
     }`);
+    console.log('Status reset result:', JSON.stringify(statusResult?.errors || statusResult?.data));
+
+    await supabase.from('projects').update({ locked: true }).eq('id', project.id);
+    console.log('Project locked');
 
     const resendClient = new Resend(process.env.RESEND_API_KEY);
     await resendClient.emails.send({
