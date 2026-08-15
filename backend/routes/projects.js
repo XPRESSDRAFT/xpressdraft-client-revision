@@ -68,7 +68,6 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-drawings(*, comments(*, author:users(id, name, role), replies(*, author:users(id, name, role))))
   try {
     const { data, error } = await supabase
       .from('projects')
