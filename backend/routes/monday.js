@@ -514,12 +514,12 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
       ) { id }
     }`);
 
-    await mondayApi(`mutation {
+await mondayApi(`mutation {
       change_column_value(
         board_id: ${process.env.MONDAY_BOARD_ID},
         item_id: ${project.monday_item_id},
         column_id: "${COL.deliveryStatus}",
-        value: "{\\"label\\":\\"\\"}"
+        value: "{\\"index\\":5}"
       ) { id }
     }`);
 
