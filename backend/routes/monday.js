@@ -166,8 +166,9 @@ router.post('/webhook', async (req, res) => {
 
     console.log(`Monday webhook: item ${pulseId}, status: READY TO DELIVER`);
 
-    const item = await getMondayItem(pulseId);
-    if (!item) return res.status(404).json({ error: 'Item not found' });
+const item = await getMondayItem(pulseId);
+console.log('Monday item fetched:', item ? item.name : 'NULL');
+if (!item) return res.status(404).json({ error: 'Item not found' });
 
     // Extract column values by ID
     const cols = {};
