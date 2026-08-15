@@ -224,9 +224,11 @@ router.post('/webhook', async (req, res) => {
     let pdfDrawingId = null;
     if (pdfFile) {
       try {
-        const pdfRes = await fetch(pdfFile.url, {
-          headers: { 'Authorization': process.env.MONDAY_API_TOKEN }
-        });
+const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
+        const assetData = await mondayApi(assetQuery);
+        const publicUrl = assetData?.data?.assets?.[0]?.public_url;
+        console.log('Asset public URL:', publicUrl);
+        const pdfRes = await fetch(publicUrl || pdfFile.url);
         const pdfBuffer = await pdfRes.arrayBuffer();
         const fileName = `${jobNumber}-${Date.now()}.pdf`;
         const { error: uploadError } = await supabase.storage
