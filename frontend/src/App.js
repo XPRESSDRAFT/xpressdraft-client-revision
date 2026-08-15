@@ -414,7 +414,7 @@ function AdminPage({user,onBack}){
               <input style={inputSt} placeholder="Email address" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/>
             </div>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
-              {[["client","Client"],["team","Team"],["admin","Admin"]].map(([v,l])=>(
+{[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(
                 <div key={v} onClick={()=>setNewRole(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(newRole===v?B.orange:B.tone1),background:newRole===v?"#FEF3E8":B.white,color:newRole===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:newRole===v?600:400}}>{l}</div>
               ))}
             </div>
