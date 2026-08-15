@@ -54,12 +54,26 @@ async function getMondayFileUrl(itemId, columnId) {
   const data = await mondayApi(`{
     items(ids: [${itemId}]) {
       column_values(ids: ["${columnId}"]) {
-        ... on FileValue { files { asset_id name file_size url url_thumbnail } }
+        id value text
       }
     }
   }`);
-  const files = data?.data?.items?.[0]?.column_values?.[0]?.files || [];
-  return files;
+  console.log('File column raw:', JSON.stringify(data?.data?.items?.[0]?.column_values?.[0]));
+  const colVal = data?.data?.items?.[0]?.column_values?.[0];
+  if (!colVal?.value) return [];
+  try {
+    const parsed = JSON.parse(colVal.value);
+    const files = parsed?.files || [];
+    console.log('Files found:', files.length);
+    return files.map(f => ({
+      name: f.name,
+      url: f.url || `https://files.monday.com/api/v1/files/${f.assetId}`,
+      asset_id: f.assetId
+    }));
+  } catch(e) {
+    console.error('File parse error:', e.message);
+    return [];
+  }
 }
 
 async function updateMondayStatus(itemId, boardId, columnId, value) {
@@ -159,24 +173,20 @@ router.post('/webhook', async (req, res) => {
 
     const { pulseId, boardId, columnId, value } = event;
 
-    // Only process DELIVERY STATUS column changes
     if (columnId !== COL.deliveryStatus) return res.json({ ok: true });
 
-const newStatus = (value?.label?.text || value?.label?.index?.toString() || JSON.stringify(value?.label) || '').toString();
-console.log('Status value received:', JSON.stringify(value));
-if (!newStatus.toUpperCase().includes('READY TO DELIVER')) return res.json({ ok: true });
+    const newStatus = (value?.label?.text || value?.label?.index?.toString() || JSON.stringify(value?.label) || '').toString();
+    console.log('Status value received:', JSON.stringify(value));
+    if (!newStatus.toUpperCase().includes('READY TO DELIVER')) return res.json({ ok: true });
 
     console.log(`Monday webhook: item ${pulseId}, status: READY TO DELIVER`);
 
-const item = await getMondayItem(pulseId);
-console.log('Monday item fetched:', item ? item.name : 'NULL');
-if (!item) return res.status(404).json({ error: 'Item not found' });
+    const item = await getMondayItem(pulseId);
+    console.log('Monday item fetched:', item ? item.name : 'NULL');
+    if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    // Extract column values by ID
     const cols = {};
-    item.column_values.forEach(col => {
-      cols[col.id] = col.text || '';
-    });
+    item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
 
     const jobNumber = item.name;
     const revisionLabel = (cols[COL.revision] || '').toUpperCase().trim();
@@ -190,7 +200,6 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
 
     console.log(`Job: ${jobNumber}, Stage: ${stageLabel}, Revision: ${revisionLabel}, isWD: ${isWD}, isFirstIssue: ${isFirstIssue}`);
 
-    // Find project in our DB
     const { data: project } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
@@ -205,12 +214,10 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
 
     const { name: clientName, email: clientEmail } = project.client;
 
-    // Get files from Monday
     const files = await getMondayFileUrl(pulseId, COL.deliveryFile);
     const pdfFile = files.find(f => f.name?.toLowerCase().endsWith('.pdf'));
     const zipFile = files.find(f => f.name?.toLowerCase().endsWith('.zip') || f.name?.toLowerCase().endsWith('.dwg'));
 
-    // Download and upload PDF to Supabase Storage
     let pdfDrawingId = null;
     if (pdfFile) {
       try {
@@ -219,7 +226,7 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
         });
         const pdfBuffer = await pdfRes.arrayBuffer();
         const fileName = `${jobNumber}-${Date.now()}.pdf`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('drawings')
           .upload(`${project.id}/${fileName}`, Buffer.from(pdfBuffer), {
             contentType: 'application/pdf', upsert: true
@@ -242,7 +249,6 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
       }
     }
 
-    // Upload ZIP to Supabase Storage and get download URL
     let dwgDownloadUrl = null;
     if (zipFile && isWD) {
       try {
@@ -250,10 +256,8 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
           headers: { 'Authorization': process.env.MONDAY_API_TOKEN }
         });
         const zipBuffer = await zipRes.arrayBuffer();
-
-        // Check file size (40MB limit for email)
         if (zipBuffer.byteLength > 40 * 1024 * 1024) {
-          await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: DWG/ZIP file for job "${jobNumber}" is too large to attach to email. Client will need to download separately.`);
+          await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: DWG/ZIP file for job "${jobNumber}" is too large. Client will need to download separately.`);
         } else {
           const zipName = `${jobNumber}-dwg-${Date.now()}.zip`;
           const { error: zipError } = await supabase.storage
@@ -261,7 +265,6 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
             .upload(`${project.id}/${zipName}`, Buffer.from(zipBuffer), {
               contentType: 'application/zip', upsert: true
             });
-
           if (!zipError) {
             const { data: zipUrlData } = supabase.storage.from('drawings').getPublicUrl(`${project.id}/${zipName}`);
             dwgDownloadUrl = zipUrlData.publicUrl;
@@ -274,64 +277,49 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
       }
     }
 
-    // Generate magic link
     const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     await supabase.from('magic_links').insert({ email: clientEmail, token, expires_at: expiresAt.toISOString() });
     const portalUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
 
-    // Determine delivery type and send email
     let deliveryType, emailSubject, emailHtml, paymentLink = null;
 
     if (isFirstIssue && !isWD && partialPayment) {
-      // PR first issue - requires partial payment
       deliveryType = 'pr_first_payment';
       paymentLink = partialPayment;
       emailSubject = 'Your plans are ready — Xpress Draft';
       emailHtml = paymentEmailHtml(clientName, partialPayment, false);
       await supabase.from('projects').update({ stripe_payment_link: partialPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
-
     } else if (isWD && finalPayment && !isFirstIssue) {
-      // WD stage non-first-issue - requires final payment
       deliveryType = 'wd_final_payment';
       paymentLink = finalPayment;
       emailSubject = 'Your working drawings are ready — Xpress Draft';
       emailHtml = paymentEmailHtml(clientName, finalPayment, true);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
-
     } else if (isWD && finalPayment && isFirstIssue) {
-      // WD first issue with payment
       deliveryType = 'wd_first_payment';
       paymentLink = finalPayment;
       emailSubject = 'Your working drawings are ready — Xpress Draft';
       emailHtml = paymentEmailHtml(clientName, finalPayment, true);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
-
     } else if (isWD && isFirstIssue && !finalPayment) {
-      // WD first issue - free (gift project)
       deliveryType = 'wd_first_free';
       emailSubject = 'Your working drawings are ready for review — Xpress Draft';
       emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
-
     } else if (!isFirstIssue && variationLink) {
-      // Variation payment required
       deliveryType = 'variation_payment';
       paymentLink = variationLink;
       emailSubject = 'Your updated plans are ready — payment required';
       emailHtml = paymentEmailHtml(clientName, variationLink, isWD);
       await supabase.from('projects').update({ stripe_payment_link: variationLink, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
-
     } else if (isFirstIssue && !isWD && !partialPayment) {
-      // PR first issue - free (gift project)
       deliveryType = 'pr_first_free';
       emailSubject = 'Your plans are ready for review — Xpress Draft';
       emailHtml = firstDeliveryEmailHtml(clientName, portalUrl);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
-
     } else {
-      // Free revision
       deliveryType = isWD ? 'wd_free_revision' : 'pr_free_revision';
       emailSubject = `Your updated ${isWD ? 'working drawings' : 'plans'} are ready — Xpress Draft`;
       emailHtml = freeRevisionEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl);
@@ -348,7 +336,6 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
       sent_to: clientEmail
     });
 
-    // Update Monday status for free deliveries
     if (!paymentLink) {
       await updateMondayStatus(pulseId, boardId, COL.deliveryStatus, 'UNDER REVIEW');
     }
@@ -362,7 +349,6 @@ if (!item) return res.status(404).json({ error: 'Item not found' });
   }
 });
 
-// Stripe webhook - payment confirmed
 router.post('/stripe-webhook', async (req, res) => {
   try {
     const event = req.body;
@@ -384,14 +370,12 @@ router.post('/stripe-webhook', async (req, res) => {
     const { name: clientName, email: clientEmail } = project.client;
     const isWD = project.stage === 'working_drawings';
 
-    // Generate magic link
     const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     await supabase.from('magic_links').insert({ email: clientEmail, token, expires_at: expiresAt.toISOString() });
     const portalUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
 
-    // Get DWG download URL if WD stage
     let dwgDownloadUrl = null;
     if (isWD && project.monday_item_id) {
       const files = await getMondayFileUrl(project.monday_item_id, COL.deliveryFile);
@@ -402,17 +386,14 @@ router.post('/stripe-webhook', async (req, res) => {
       }
     }
 
-    // Unlock project
     await supabase.from('projects').update({ locked: false, stripe_payment_link: null }).eq('id', project.id);
 
-    // Send portal access email
     await sendEmail(
       clientEmail,
       `Payment confirmed — your ${isWD ? 'working drawings are' : 'plans are'} ready — Xpress Draft`,
       portalAccessEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl)
     );
 
-    // Update Monday status
     if (project.monday_item_id) {
       const item = await getMondayItem(project.monday_item_id);
       if (item) {
@@ -432,7 +413,63 @@ router.post('/stripe-webhook', async (req, res) => {
   }
 });
 
-// Client submits changes - upload PDF to Monday and notify team
+router.post('/approve', auth, async (req, res) => {
+  try {
+    const { projectId } = req.body;
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('*, client:users!projects_client_id_fkey(id, name, email)')
+      .eq('id', projectId)
+      .single();
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const clientName = project.client?.name || 'Client';
+    const jobNumber = project.job_number || project.name;
+
+    const resendClient = new Resend(process.env.RESEND_API_KEY);
+    await resendClient.emails.send({
+      from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
+      to: 'info@xpressdraft.com.au',
+      subject: `Drawings approved — ${jobNumber}`,
+      html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Drawings Approved</h2>
+        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
+          <strong>${clientName}</strong> has approved the drawings for <strong>${jobNumber}</strong>.
+        </p>
+        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
+          Client message: <em>"I approve the drawings. Please proceed to final set."</em>
+        </p>
+        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}"
+           style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">
+          View in Monday →
+        </a>
+      </div>`
+    });
+
+    if (project.monday_item_id) {
+      await mondayApi(`mutation {
+        move_item_to_group(item_id: ${project.monday_item_id}, group_id: "group_title") { id }
+      }`);
+      await mondayApi(`mutation {
+        change_column_value(
+          board_id: ${process.env.MONDAY_BOARD_ID},
+          item_id: ${project.monday_item_id},
+          column_id: "${COL.deliveryStatus}",
+          value: "{\\"label\\":\\"PR APPROVED\\"}"
+        ) { id }
+      }`);
+    }
+
+    console.log(`Approval sent for ${jobNumber}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Approve error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   try {
     const { projectId, commentSummary } = req.body;
@@ -440,7 +477,6 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
 
     if (!pdfBuffer) return res.status(400).json({ error: 'PDF required' });
 
-    // Get project and client details
     const { data: project } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
@@ -454,7 +490,6 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     const jobNumber = project.job_number || project.name;
     const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
 
-    // Upload PDF to Monday Instructions column
     const formData = new FormData();
     formData.append('query', `mutation { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: "file") { id } }`);
     formData.append('variables[file]', new Blob([pdfBuffer], { type: 'application/pdf' }), fileName);
@@ -467,7 +502,6 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
 
     console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
 
-    // Move item to TO BE REVIEWED group
     await mondayApi(`mutation {
       move_item_to_group(
         item_id: ${project.monday_item_id},
@@ -475,17 +509,15 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
       ) { id }
     }`);
 
-    // Reset DELIVERY STATUS to blank
     await mondayApi(`mutation {
       change_column_value(
         board_id: ${process.env.MONDAY_BOARD_ID},
         item_id: ${project.monday_item_id},
         column_id: "${COL.deliveryStatus}",
-        value: "{\"label\":\"\"}"
+        value: "{\\"label\\":\\"\\"}"
       ) { id }
     }`);
 
-    // Send notification email to team
     const resendClient = new Resend(process.env.RESEND_API_KEY);
     await resendClient.emails.send({
       from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
@@ -504,7 +536,7 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
           <p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">Comments:</p>
           <p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p>
         </div>` : ''}
-        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}" 
+        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}"
            style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:24px;">
           View in Monday →
         </a>
