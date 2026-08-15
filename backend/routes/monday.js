@@ -65,9 +65,9 @@ async function getMondayFileUrl(itemId, columnId) {
     const parsed = JSON.parse(colVal.value);
     const files = parsed?.files || [];
     console.log('Files found:', files.length);
-    return files.map(f => ({
+   return files.map(f => ({
       name: f.name,
-      url: f.url || `https://files.monday.com/api/v1/files/${f.assetId}`,
+      url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`,
       asset_id: f.assetId
     }));
   } catch(e) {
