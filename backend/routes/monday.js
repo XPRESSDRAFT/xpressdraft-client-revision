@@ -500,8 +500,10 @@ console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO 
 
 const FormDataNode = require('form-data');
     const mondayForm = new FormDataNode();
-    mondayForm.append('query', `mutation { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: "file") { id } }`);
-    mondayForm.append('variables[file]', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
+    mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id } }`);
+    mondayForm.append('variables', JSON.stringify({ file: null }));
+    mondayForm.append('map', JSON.stringify({ file: ['variables.file'] }));
+    mondayForm.append('file', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
 
     const uploadRes = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
