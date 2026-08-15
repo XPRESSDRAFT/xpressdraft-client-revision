@@ -32,6 +32,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [interpreting,setInterpreting]=useState(null);
   const [retryCounts,setRetryCounts]=useState({});
   const [saving,setSaving]=useState(false);
+  const [approving,setApproving]=useState(false);
+  const [approved,setApproved]=useState(false);
   const [pdfReady,setPdfReady]=useState(!!window.pdfjsLib);
   const [pdfDoc,setPdfDoc]=useState(null);
   const [page,setPage]=useState(1);
@@ -218,6 +220,17 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       onRevisionConfirmed(d.revisionSummary);
       alert("Revision confirmed. The Xpress Draft team has been notified.");
     }catch(e){alert("Error: "+e.message);}
+  };
+
+  const handleApprove=async()=>{
+    if(!window.confirm("Approve drawings?\n\nThis will send a confirmation to Xpress Draft to proceed to the final set."))return;
+    setApproving(true);
+    try{
+      await api.approveDrawings(project.id);
+      setApproved(true);
+      alert("Your approval has been sent. Xpress Draft will proceed to the final set.");
+    }catch(e){alert("Error: "+e.message);}
+    setApproving(false);
   };
 
   const handleSave=async()=>{
@@ -452,6 +465,16 @@ const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/sub
               <button onClick={submitAllChanges} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",background:B.black}}>
                 Submit all changes
               </button>
+            )}
+            {user.role==="client"&&!approved&&(
+              <button onClick={handleApprove} disabled={approving} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",marginTop:8,background:"#2E5C10",border:"2px solid #639922"}}>
+                {approving?"Sending approval...":"Approve drawings"}
+              </button>
+            )}
+            {approved&&(
+              <div style={{marginTop:8,padding:12,background:"#EAF3DE",borderRadius:8,textAlign:"center",fontSize:13,color:"#2E5C10",fontWeight:600}}>
+                Drawings approved
+              </div>
             )}
           </div>
         </div>
