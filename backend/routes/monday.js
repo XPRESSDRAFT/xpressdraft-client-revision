@@ -498,15 +498,18 @@ console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO 
     const jobNumber = project.job_number || project.name;
     const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
 
-    const formData = new FormData();
-    formData.append('query', `mutation { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: "file") { id } }`);
-    formData.append('variables[file]', new Blob([pdfBuffer], { type: 'application/pdf' }), fileName);
+const { default: FormData } = await import('form-data');
+    const mondayForm = new FormData();
+    mondayForm.append('query', `mutation { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: "file") { id } }`);
+    mondayForm.append('variables[file]', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf' });
 
-    await fetch('https://api.monday.com/v2/file', {
+    const uploadRes = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
-      headers: { 'Authorization': process.env.MONDAY_API_TOKEN },
-      body: formData
+      headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...mondayForm.getHeaders() },
+      body: mondayForm
     });
+    const uploadData = await uploadRes.json();
+    console.log('Monday file upload result:', JSON.stringify(uploadData));
 
     console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
 
