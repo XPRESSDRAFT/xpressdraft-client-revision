@@ -276,9 +276,19 @@ const generateMarkupPdf=async()=>{
   };
 
   const submitAllChanges=async()=>{
+    // Check if project is locked (under review)
+    if(project.locked){
+      alert("Your changes are currently being reviewed by the Xpress Draft team. You will be notified when your updated drawings are ready.");
+      return;
+    }
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
     const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
+    // Check over-allowance
+    if(rs && rs.used>=rs.totalAllowed){
+      alert("You have used all "+total+" included revision"+(total!==1?"s":"")+" for the "+( rs.stageLabel==="PR"?"Preliminary":"Working Drawings")+" stage.\n\nThis revision will incur a variation fee. A member of the Xpress Draft team will contact you to advise the cost before proceeding.\n\nPlease contact us at info@xpressdraft.com.au if you have any questions.");
+      return;
+    }
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
     const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nYou have "+openComments.length+" comment"+(openComments.length!==1?"s":"")+" to submit.\n\nProceed?");
     if(!confirmed)return;
