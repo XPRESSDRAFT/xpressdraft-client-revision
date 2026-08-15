@@ -161,8 +161,9 @@ router.post('/webhook', async (req, res) => {
     // Only process DELIVERY STATUS column changes
     if (columnId !== COL.deliveryStatus) return res.json({ ok: true });
 
-    const newStatus = value?.label?.text || value?.label || '';
-    if (newStatus.toUpperCase() !== 'READY TO DELIVER') return res.json({ ok: true });
+const newStatus = (value?.label?.text || value?.label?.index?.toString() || JSON.stringify(value?.label) || '').toString();
+console.log('Status value received:', JSON.stringify(value));
+if (!newStatus.toUpperCase().includes('READY TO DELIVER')) return res.json({ ok: true });
 
     console.log(`Monday webhook: item ${pulseId}, status: READY TO DELIVER`);
 
