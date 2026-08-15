@@ -46,6 +46,7 @@ async function getMondayItem(itemId) {
       board { id }
     }
   }`);
+  console.log('Monday API response:', JSON.stringify(data?.data?.items?.length), 'error:', JSON.stringify(data?.errors));
   return data?.data?.items?.[0];
 }
 
