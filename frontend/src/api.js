@@ -29,6 +29,9 @@ export const getUsers = () =>
 export const createUser = (data) =>
   fetch(`${API}/api/users`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle);
 
+export const updateUser = (id, data) =>
+  fetch(`${API}/api/users/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle);
+
 export const resendInvite = (id) =>
   fetch(`${API}/api/users/${id}/invite`, { method: 'POST', headers: headers() }).then(handle);
 
@@ -98,6 +101,11 @@ export const getMarkups = (drawingId) =>
 export const saveMarkups = (drawingId, paths, page = 1, canvasWidth = 0, canvasHeight = 0) =>
   fetch(`${API}/api/drawings/${drawingId}/markups`, {
     method: 'PUT', headers: headers(), body: JSON.stringify({ paths, page, canvasWidth, canvasHeight })
+  }).then(handle);
+
+export const approveDrawings = (projectId) =>
+  fetch(`${API}/api/monday/approve`, {
+    method: 'POST', headers: headers(), body: JSON.stringify({ projectId })
   }).then(handle);
 
 export const incrementMarkupExport = (projectId, num) =>
