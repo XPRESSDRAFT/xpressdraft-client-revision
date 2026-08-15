@@ -42,7 +42,7 @@ async function getMondayItem(itemId) {
   const data = await mondayApi(`{
     items(ids: [${itemId}]) {
       id name
-      column_values { id title text value }
+      column_values { id text value }
       board { id }
     }
   }`);
