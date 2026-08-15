@@ -282,9 +282,11 @@ try{
       console.log("API URL:", process.env.REACT_APP_API_URL||"(empty)");
       console.log("Token:", !!localStorage.getItem("xpd_token"));
       const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
- const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
+const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
       console.log("Submit response status:", submitRes.status);
-    }catch(e){console.error("PDF upload error:",e);}
+      const submitData=await submitRes.json();
+      console.log("Submit response data:", submitData);
+}catch(e){console.error("PDF upload error:",e.message,e.stack);}
     alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
   };
 
