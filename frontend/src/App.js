@@ -513,7 +513,7 @@ function ProjectDetail({project,user,onBack}){
 
   // Client dashboard
   if(user.role==="client"&&showDashboard){
-    const timelineSteps=["TO START","PROJECT OVERVIEW","STARTED","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
+    const timelineSteps=["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
     const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):-1;
     return(
       <div style={{minHeight:"100vh",background:B.white,fontFamily:"Manrope,sans-serif"}}>
