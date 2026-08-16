@@ -430,6 +430,7 @@ router.post('/stripe-webhook', async (req, res) => {
     console.error('Stripe webhook error:', err);
     res.status(500).json({ error: err.message });
   }
+});
 
 router.post('/approve', auth, async (req, res) => {
   try {
