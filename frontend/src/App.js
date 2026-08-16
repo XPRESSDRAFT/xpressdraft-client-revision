@@ -118,7 +118,7 @@ function ProjectsPage({user,onLogout}){
   const fileRefs=useRef({});
 
   useEffect(()=>{
-    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);});
+    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"&&d.projects.length===1)setActiveProject(d.projects[0]);});
     if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
 
@@ -513,7 +513,7 @@ function ProjectDetail({project,user,onBack}){
 
   // Client dashboard
   if(user.role==="client"&&showDashboard){
-const timelineSteps=["TO START","PROJECT OVERVIEW","STARTED","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
+    const timelineSteps=["TO START","PROJECT OVERVIEW","STARTED","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
     const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):-1;
     return(
       <div style={{minHeight:"100vh",background:"#444444",fontFamily:"Manrope,sans-serif"}}>
@@ -521,7 +521,7 @@ const timelineSteps=["TO START","PROJECT OVERVIEW","STARTED","3D MODEL","DESIGN"
           <button onClick={onBack} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back to projects</button>
         </nav>
         <div style={{maxWidth:700,margin:"0 auto",padding:"3rem 24px"}}>
-          <div style={{textAlign:"center",marginBottom:40}}><XPDLogo size={56} variant="white"/><div style={{marginTop:20}}>{project.job_number&&<span style={{fontSize:13,padding:"3px 12px",borderRadius:20,background:B.orange,color:B.white,fontWeight:600,marginRight:8}}>{project.job_number}</span>}<h1 style={{fontSize:26,fontWeight:700,color:B.white,margin:"12px 0 4px"}}>{project.site_address||project.name}</h1><p style={{fontSize:13,color:B.tone2,margin:0}}>Client Portal</p></div></div>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:40,gap:24}}><div><XPDLogo size={48} variant="color"/><div style={{marginTop:16}}>{project.job_number&&<span style={{fontSize:12,padding:"2px 10px",borderRadius:20,background:B.orange,color:B.white,fontWeight:600}}>{project.job_number}</span>}<h1 style={{fontSize:22,fontWeight:700,color:B.white,margin:"8px 0 4px"}}>{project.site_address||project.name}</h1><p style={{fontSize:13,color:B.tone2,margin:0}}>Client Portal</p></div></div></div>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:32}}>{[{label:"Stage",value:statusLoading?"…":projectStatus?.stage||"Setup",bg:"#EA672F22",color:B.orange,border:"1px solid #EA672F44"},{label:"Revision",value:statusLoading?"…":projectStatus?.revision||"—",bg:"#FFFFFF11",color:B.white,border:"1px solid #FFFFFF22"},{label:"Timeline",value:statusLoading?"…":projectStatus?.timeline||"—",bg:"#378ADD22",color:"#7BB8F0",border:"1px solid #378ADD44"}].map((s,i)=>(<div key={i} style={{background:s.bg,border:s.border,borderRadius:12,padding:"20px 16px",textAlign:"center"}}><div style={{fontSize:11,color:B.tone2,fontWeight:600,letterSpacing:"0.08em",marginBottom:8}}>{s.label.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.value}</div></div>))}</div>
 
