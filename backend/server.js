@@ -22,6 +22,7 @@ app.use('/api/drawings/:drawingId/comments', require('./routes/comments'));
 app.use('/api/drawings/:drawingId/markups',  require('./routes/markups'));
 app.use('/api/monday',   require('./routes/monday'));
 app.use('/api/health',   require('./routes/health'));
+app.use('/api/proposals', require('./routes/proposals'));
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong' });
