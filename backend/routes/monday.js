@@ -195,9 +195,7 @@ router.post('/webhook', async (req, res) => {
     const revisionLabel = (cols[COL.revision] || '').toUpperCase().trim();
     const stageLabel = (cols[COL.stage] || '').toUpperCase().trim();
 const partialPayment = (cols[COL.partialPayment] || '').trim();
-    console.log('Partial payment value:', partialPayment);
-    console.log('Final payment value:', finalPayment);
-    console.log('Variation link value:', variationLink);
+console.log('Partial payment value:', partialPayment);
     const finalPayment = (cols[COL.finalPayment] || '').trim();
     const variationLink = (cols[COL.variationLink] || '').trim();
 
