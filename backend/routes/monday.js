@@ -430,61 +430,6 @@ router.post('/stripe-webhook', async (req, res) => {
     console.error('Stripe webhook error:', err);
     res.status(500).json({ error: err.message });
   }
-});
-
-    const { data: project } = await supabase
-      .from('projects')
-      .select('*, client:users!projects_client_id_fkey(id, name, email)')
-      .eq('stripe_payment_link', paymentLink)
-      .single();
-
-    if (!project || !project.client) return res.json({ received: true });
-
-    const { name: clientName, email: clientEmail } = project.client;
-    const isWD = project.stage === 'working_drawings';
-
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-    await supabase.from('magic_links').insert({ email: clientEmail, token, expires_at: expiresAt.toISOString() });
-    const portalUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
-
-    let dwgDownloadUrl = null;
-    if (isWD && project.monday_item_id) {
-      const files = await getMondayFileUrl(project.monday_item_id, COL.deliveryFile);
-      const zipFile = files.find(f => f.name?.toLowerCase().endsWith('.zip') || f.name?.toLowerCase().endsWith('.dwg'));
-      if (zipFile) {
-        const { data: urlData } = supabase.storage.from('drawings').getPublicUrl(`${project.id}/${zipFile.name}`);
-        dwgDownloadUrl = urlData?.publicUrl;
-      }
-    }
-
-    await supabase.from('projects').update({ locked: false, stripe_payment_link: null }).eq('id', project.id);
-
-    await sendEmail(
-      clientEmail,
-      `Payment confirmed — your ${isWD ? 'working drawings are' : 'plans are'} ready — Xpress Draft`,
-      portalAccessEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl)
-    );
-
-    if (project.monday_item_id) {
-      const item = await getMondayItem(project.monday_item_id);
-      if (item) {
-        await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'PAID');
-        setTimeout(async () => {
-          await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'UNDER REVIEW');
-        }, 3000);
-      }
-    }
-
-    console.log(`Portal access sent after payment to ${clientEmail}`);
-    res.json({ received: true });
-
-  } catch (err) {
-    console.error('Stripe webhook error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 router.post('/approve', auth, async (req, res) => {
   try {
