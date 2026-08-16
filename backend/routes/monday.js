@@ -375,25 +375,30 @@ router.post('/stripe-webhook', async (req, res) => {
 
 const session = event.data.object;
     const paymentLinkId = session.payment_link;
-    const paymentUrl = session.url;
 
-    console.log('Payment link ID:', paymentLinkId, 'URL:', paymentUrl);
+    console.log('Payment link ID:', paymentLinkId);
 
-    // Try matching by full URL first, then by ID suffix
-    let { data: project } = await supabase
+    if (!paymentLinkId) {
+      console.log('No payment link ID found in event');
+      return res.json({ received: true });
+    }
+
+    // Retrieve full payment link URL from Stripe
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    let paymentLink = null;
+    try {
+      const pl = await stripe.paymentLinks.retrieve(paymentLinkId);
+      paymentLink = pl.url;
+      console.log('Payment link URL from Stripe:', paymentLink);
+    } catch(e) {
+      console.log('Could not retrieve payment link URL:', e.message);
+    }
+
+    const { data: project } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
       .ilike('stripe_payment_link', `%${paymentLinkId}%`)
       .single();
-
-    if (!project && paymentUrl) {
-      const result = await supabase
-        .from('projects')
-        .select('*, client:users!projects_client_id_fkey(id, name, email)')
-        .ilike('stripe_payment_link', `%${paymentUrl}%`)
-        .single();
-      project = result.data;
-    }
 
     if (!project || !project.client) {
       console.log('No project found for payment link:', paymentLink);
