@@ -107,6 +107,7 @@ function ProjectsPage({user,onLogout}){
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
   const [showHealth,setShowHealth]=useState(false);
+  const [projectStatuses,setProjectStatuses]=useState({});
   const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
@@ -118,7 +119,7 @@ function ProjectsPage({user,onLogout}){
   const fileRefs=useRef({});
 
   useEffect(()=>{
-    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"&&d.projects.length===1)setActiveProject(d.projects[0]);});
+    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"&&d.projects.length===1){setActiveProject(d.projects[0]);return;}if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});
     if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
 
@@ -298,6 +299,7 @@ function ProjectsPage({user,onLogout}){
                       </span>
                     </div>
                     {p.client&&<p style={{fontSize:13,color:B.black2,margin:"0 0 4px"}}>Client: {p.client.name}</p>}
+                    {user.role==="client"&&projectStatuses[p.id]&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>{projectStatuses[p.id].stage&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:500}}>{projectStatuses[p.id].stage}</span>}{projectStatuses[p.id].timeline&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:500}}>{projectStatuses[p.id].timeline}</span>}</div>}
                     {p.description&&<p style={{fontSize:13,color:B.black2,margin:"0 0 6px"}}>{p.description}</p>}
                     <div style={{fontSize:12,color:B.black2,display:"flex",gap:16,flexWrap:"wrap"}}>
                       <span>{p.drawings?.length||0} drawing{p.drawings?.length!==1?"s":""}</span>
