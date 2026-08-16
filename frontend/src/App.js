@@ -48,7 +48,7 @@ function LoginPage({onLogin}){
         <div style={{fontSize:13,color:B.black2,marginBottom:28,textAlign:"center"}}>Plan Review Portal</div>
         {sent?(
           <div style={{padding:16,background:"#EAF3DE",borderRadius:8,color:"#2E5C10",fontSize:14,lineHeight:1.6}}>
-            Check your email for a login link. It expires in 15 minutes.
+            Check your email for a login link. It expires in 48 hours.
           </div>
         ):(
           <>
@@ -107,7 +107,7 @@ function ProjectsPage({user,onLogout}){
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
   const [showHealth,setShowHealth]=useState(false);
- const [editingProject,setEditingProject]=useState(null);
+  const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
   const [editAddress,setEditAddress]=useState("");
@@ -119,12 +119,12 @@ function ProjectsPage({user,onLogout}){
 
   useEffect(()=>{
     api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);});
-if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
+    if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
 
   const createProject=async()=>{
     if(!newName.trim())return;
-    const d=await api.createProject({name:newName,description:newDesc,stage:newStage,clientId:newClientId||null,jobNumber:newJobNum,siteAddress:newAddress});
+    const d=await api.createProject({name:newName,description:newDesc,stage:newStage,clientId:newClientId||null,jobNumber:newJobNum,siteAddress:newAddress,contractorId:newContractorId||null,assignedTo:newAssignedTo||null});
     setProjects([d.project,...projects]);
     setShowNew(false);setNewName("");setNewDesc("");setNewJobNum("");setNewAddress("");
   };
@@ -156,6 +156,12 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
     if(!newVal||!newVal.trim()||newVal===current)return;
     await api.updateProject(p.id,{siteAddress:newVal.trim()});
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
+  };
+
+  const unlockProject=async(p)=>{
+    if(!window.confirm("Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment."))return;
+    await api.updateProject(p.id,{locked:false,stripePaymentLink:null});
+    const d=await api.getProjects();setProjects(d.projects);
   };
 
   const openEdit=(p)=>{
@@ -233,7 +239,7 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
           {user.role==="admin"&&<button onClick={()=>setShowHealth(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>System</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
-          <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
+          <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:user.role==="contractor"?"#378ADD":"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
           <button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>
         </div>
       </nav>
@@ -305,16 +311,17 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
                         <button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button>
                         <input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}}
                           onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>
+                        {p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}
                         <button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button>
                       </>
                     )}
-{(p.drawings?.length||0)>0&&(
-p.locked&&user.role==='client'
-    ?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>
-      {p.stripe_payment_link?"Pay to access plans":"Payment pending"}
-    </a>
-    :<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>
-)}
+                    {(p.drawings?.length||0)>0&&(
+                      p.locked&&user.role==='client'
+                        ?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>
+                          {p.stripe_payment_link?"Pay to access plans":"Payment pending"}
+                        </a>
+                        :<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>
+                    )}
                   </div>
                 </div>
                 {p.drawings?.length>0&&(
@@ -420,7 +427,7 @@ function AdminPage({user,onBack}){
               <input style={inputSt} placeholder="Email address" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/>
             </div>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
-{[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(
+              {[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(
                 <div key={v} onClick={()=>setNewRole(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(newRole===v?B.orange:B.tone1),background:newRole===v?"#FEF3E8":B.white,color:newRole===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:newRole===v?600:400}}>{l}</div>
               ))}
             </div>
@@ -443,8 +450,9 @@ function AdminPage({user,onBack}){
             <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto",padding:"12px 16px",borderBottom:"1px solid "+B.cream,alignItems:"center"}}>
               <span style={{fontSize:14,fontWeight:500,color:B.black}}>{u.name}</span>
               <span style={{fontSize:13,color:B.black2}}>{u.email}</span>
-              <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:u.role==="admin"?"#F0EEF8":u.role==="team"?"#FEF3E8":"#EAF3DE",color:u.role==="admin"?"#3D3580":u.role==="team"?B.orange:"#2E5C10",fontWeight:600,marginRight:8}}>{u.role}</span>
-              <button onClick={()=>openEditUser(u)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Edit</button><button onClick={()=>resendInvite(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Resend invite</button>
+              <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:u.role==="admin"?"#F0EEF8":u.role==="team"?"#FEF3E8":u.role==="contractor"?"#EBF3FE":"#EAF3DE",color:u.role==="admin"?"#3D3580":u.role==="team"?B.orange:u.role==="contractor"?"#1A4A8A":"#2E5C10",fontWeight:600,marginRight:8}}>{u.role}</span>
+              <button onClick={()=>openEditUser(u)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Edit</button>
+              <button onClick={()=>resendInvite(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Resend invite</button>
               <button onClick={()=>removeUser(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",color:"#8B2020",borderColor:"#F7C1C1"}}>Remove</button>
             </div>
           ))}
@@ -479,6 +487,8 @@ function ProjectDetail({project,user,onBack}){
   const [activeDrawing,setActiveDrawing]=useState(null);
   const [loading,setLoading]=useState(true);
   const [revisionSummary,setRevisionSummary]=useState(project.revisionSummary);
+  const [projectStatus,setProjectStatus]=useState(null);
+  const [statusLoading,setStatusLoading]=useState(true);
 
   useEffect(()=>{
     api.getDrawings(project.id).then(d=>{
@@ -486,6 +496,9 @@ function ProjectDetail({project,user,onBack}){
       if(d.drawings.length>0)setActiveDrawing(d.drawings[0]);
       setLoading(false);
     });
+    fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+project.id,{
+      headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
+    }).then(r=>r.json()).then(d=>{setProjectStatus(d);setStatusLoading(false);}).catch(()=>setStatusLoading(false));
   },[]);
 
   const grantBonus=async()=>{
@@ -515,7 +528,30 @@ function ProjectDetail({project,user,onBack}){
           </div>
         )}
       </nav>
-      <div style={{display:"flex",height:"calc(100vh - 52px)",overflow:"hidden"}}>
+      {user.role==="client"&&(
+        <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"10px 20px",display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
+          {statusLoading?<span style={{fontSize:12,color:B.black2}}>Loading project status...</span>:
+          projectStatus?.stage?(
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>STAGE</span>
+                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{projectStatus.stage}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>REVISION</span>
+                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:500}}>{projectStatus.revision}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>TIMELINE</span>
+                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:500}}>{projectStatus.timeline}</span>
+              </div>
+            </>
+          ):(
+            <span style={{fontSize:12,color:B.black2,fontStyle:"italic"}}>Your project is in the setup stage — our team is reviewing your brief, getting familiar with the site and preparing everything before we begin drafting. You'll be notified as soon as your drawings are ready.</span>
+          )}
+        </div>
+      )}
+      <div style={{display:"flex",height:user.role==="client"?"calc(100vh - 100px)":"calc(100vh - 52px)",overflow:"hidden"}}>
         <div style={{width:180,background:B.white,borderRight:"1px solid "+B.tone1,overflowY:"auto"}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.06em"}}>DRAWINGS</div>
           {drawings.map(d=>(
@@ -531,7 +567,7 @@ function ProjectDetail({project,user,onBack}){
             </div>
           ))}
         </div>
-{activeDrawing && project.locked && user.role === 'client'
+        {activeDrawing && project.locked && user.role === 'client'
           ?<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:B.cream,gap:16,padding:40}}>
             <div style={{fontSize:32}}>🔒</div>
             <h2 style={{color:B.black,margin:0,fontSize:20}}>Payment required</h2>
