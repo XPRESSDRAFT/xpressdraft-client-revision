@@ -489,6 +489,7 @@ function ProjectDetail({project,user,onBack}){
   const [revisionSummary,setRevisionSummary]=useState(project.revisionSummary);
   const [projectStatus,setProjectStatus]=useState(null);
   const [statusLoading,setStatusLoading]=useState(true);
+  const [showDashboard,setShowDashboard]=useState(true);
 
   useEffect(()=>{
     api.getDrawings(project.id).then(d=>{
@@ -510,10 +511,34 @@ function ProjectDetail({project,user,onBack}){
   const rs=revisionSummary;
   const isTeam=user.role==="team"||user.role==="admin";
 
+  // Client dashboard
+  if(user.role==="client"&&showDashboard){
+    const timelineSteps=["TO START","PROJECT OVERVIEW","STARTED","SITE VISIT","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
+    const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):-1;
+    return(
+      <div style={{minHeight:"100vh",background:"#444444",fontFamily:"Manrope,sans-serif"}}>
+        <nav style={{background:"#2A2B29",padding:"0 24px",display:"flex",alignItems:"center",height:52}}>
+          <button onClick={onBack} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back to projects</button>
+        </nav>
+        <div style={{maxWidth:700,margin:"0 auto",padding:"3rem 24px"}}>
+          <div style={{textAlign:"center",marginBottom:40}}><XPDLogo size={56} variant="white"/><div style={{marginTop:20}}>{project.job_number&&<span style={{fontSize:13,padding:"3px 12px",borderRadius:20,background:B.orange,color:B.white,fontWeight:600,marginRight:8}}>{project.job_number}</span>}<h1 style={{fontSize:26,fontWeight:700,color:B.white,margin:"12px 0 4px"}}>{project.site_address||project.name}</h1><p style={{fontSize:13,color:B.tone2,margin:0}}>Client Portal</p></div></div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:32}}>{[{label:"Stage",value:statusLoading?"…":projectStatus?.stage||"Setup",bg:"#EA672F22",color:B.orange,border:"1px solid #EA672F44"},{label:"Revision",value:statusLoading?"…":projectStatus?.revision||"—",bg:"#FFFFFF11",color:B.white,border:"1px solid #FFFFFF22"},{label:"Timeline",value:statusLoading?"…":projectStatus?.timeline||"—",bg:"#378ADD22",color:"#7BB8F0",border:"1px solid #378ADD44"}].map((s,i)=>(<div key={i} style={{background:s.bg,border:s.border,borderRadius:12,padding:"20px 16px",textAlign:"center"}}><div style={{fontSize:11,color:B.tone2,fontWeight:600,letterSpacing:"0.08em",marginBottom:8}}>{s.label.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.value}</div></div>))}</div>
+
+          {projectStatus?.timeline&&currentStep>=0&&(<div style={{background:"#FFFFFF0A",borderRadius:12,padding:"20px 24px",marginBottom:32,border:"1px solid #FFFFFF11"}}><div style={{fontSize:11,color:B.tone2,fontWeight:600,letterSpacing:"0.08em",marginBottom:16}}>PROJECT PROGRESS</div><div style={{display:"flex",alignItems:"center",overflowX:"auto"}}>{timelineSteps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:12,height:12,borderRadius:"50%",background:i<currentStep?"#639922":i===currentStep?B.orange:"#FFFFFF22",border:i===currentStep?"2px solid "+B.orange:"none"}}/><div style={{fontSize:8,color:i<=currentStep?B.white:B.tone2,marginTop:4,textAlign:"center",maxWidth:48,lineHeight:1.2}}>{step}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<currentStep?"#639922":"#FFFFFF22",marginBottom:16,minWidth:8}}/>}</div>))}</div></div>)}
+
+          {!statusLoading&&!projectStatus?.stage&&(<div style={{background:"#FFFFFF0A",borderRadius:12,padding:"24px",marginBottom:32,border:"1px solid #FFFFFF11",textAlign:"center"}}><p style={{color:B.tone2,fontSize:14,lineHeight:1.8,margin:0}}>Your project is in the setup stage — our team is reviewing your brief, getting familiar with the site and preparing everything before we begin drafting.<br/><br/>You'll be notified as soon as your drawings are ready for review.</p></div>)}
+
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>{drawings.length>0&&!project.locked&&<button onClick={()=>setShowDashboard(false)} style={{...btnPrimary,fontSize:15,padding:"14px 32px"}}>Review my drawings →</button>}{project.locked&&project.stripe_payment_link&&<a href={project.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#8B2020",textDecoration:"none"}}>Pay to access plans →</a>}{drawings.length>0&&!project.locked&&<button onClick={async()=>{if(!window.confirm("Approve drawings?\n\nThis will send a confirmation to Xpress Draft to proceed to the final set."))return;try{await fetch((process.env.REACT_APP_API_URL||"")+"/api/monday/approve",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({projectId:project.id})});alert("Your approval has been sent.");}catch(e){alert("Error: "+e.message);}}} style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#2E5C10",border:"2px solid #639922"}}>Approve drawings ✓</button>}</div>
+        </div>
+      </div>
+    );
+  }
+
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 20px",display:"flex",alignItems:"center",height:52,gap:12}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Projects</button>
+        <button onClick={()=>user.role==="client"?setShowDashboard(true):onBack()} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>{user.role==="client"?"← Dashboard":"Projects"}</button>
         <span style={{color:B.black2}}>|</span>
         <span style={{fontWeight:600,fontSize:14,color:B.cream}}>
           {project.job_number&&<span style={{color:B.orange,marginRight:8}}>{project.job_number}</span>}
@@ -528,30 +553,7 @@ function ProjectDetail({project,user,onBack}){
           </div>
         )}
       </nav>
-      {user.role==="client"&&(
-        <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"10px 20px",display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
-          {statusLoading?<span style={{fontSize:12,color:B.black2}}>Loading project status...</span>:
-          projectStatus?.stage?(
-            <>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>STAGE</span>
-                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{projectStatus.stage}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>REVISION</span>
-                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:500}}>{projectStatus.revision}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,color:B.black2,fontWeight:600}}>TIMELINE</span>
-                <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:500}}>{projectStatus.timeline}</span>
-              </div>
-            </>
-          ):(
-            <span style={{fontSize:12,color:B.black2,fontStyle:"italic"}}>Your project is in the setup stage — our team is reviewing your brief, getting familiar with the site and preparing everything before we begin drafting. You'll be notified as soon as your drawings are ready.</span>
-          )}
-        </div>
-      )}
-      <div style={{display:"flex",height:user.role==="client"?"calc(100vh - 100px)":"calc(100vh - 52px)",overflow:"hidden"}}>
+      <div style={{display:"flex",height:"calc(100vh - 52px)",overflow:"hidden"}}>
         <div style={{width:180,background:B.white,borderRight:"1px solid "+B.tone1,overflowY:"auto"}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.06em"}}>DRAWINGS</div>
           {drawings.map(d=>(
