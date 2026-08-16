@@ -119,7 +119,7 @@ function ProjectsPage({user,onLogout}){
   const fileRefs=useRef({});
 
   useEffect(()=>{
-    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"&&d.projects.length===1){setActiveProject(d.projects[0]);return;}if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});
+    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});
     if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
 
@@ -282,6 +282,42 @@ function ProjectsPage({user,onLogout}){
 
         {loading&&<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading projects...</div>}
 
+        {user.role==="client"?(
+          <div style={{display:"grid",gap:16}}>
+            {projects.map(p=>{
+              const ps=projectStatuses[p.id];
+              const timelineSteps=["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
+              const currentStep=ps?.timeline?timelineSteps.indexOf(ps.timeline):0;
+              const step=currentStep>=0?currentStep:0;
+              return(
+                <div key={p.id} style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:12,padding:"1.5rem",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16,gap:12}}>
+                    <div>
+                      {p.job_number&&<span style={{fontSize:12,padding:"2px 10px",borderRadius:20,background:"#444",color:B.cream,fontWeight:600,marginRight:8}}>{p.job_number}</span>}
+                      <h3 style={{fontSize:16,fontWeight:700,color:B.black,margin:"8px 0 2px"}}>{p.site_address||p.name}</h3>
+                      <span style={{fontSize:12,color:B.black2}}>{p.revisionSummary?.stageLabel==="PR"?"Preliminary":"Working Drawings"}</span>
+                    </div>
+                    <div style={{display:"flex",gap:8,flexShrink:0}}>
+                      {ps?.stage&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{ps.stage}</span>}
+                      {ps?.timeline&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{ps.timeline}</span>}
+                    </div>
+                  </div>
+                  <div style={{marginBottom:16}}>
+                    <div style={{display:"flex",alignItems:"center"}}>
+                      {timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:10,height:10,borderRadius:"50%",background:i<step?"#639922":i===step?B.orange:B.tone1,border:i===step?"2px solid "+B.orange:"none"}}/><div style={{fontSize:7,color:i<=step?B.black:B.black2,marginTop:3,textAlign:"center",maxWidth:40,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step?"#639922":B.tone1,marginBottom:14,minWidth:6}}/>}</div>))}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                    {p.locked&&p.stripe_payment_link
+                      ?<a href={p.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none",fontSize:13}}>Pay to access plans →</a>
+                      :(p.drawings?.length||0)>0&&<button onClick={()=>setActiveProject({...p,skipDashboard:true})} style={{...btnPrimary,fontSize:13}}>Review my drawings →</button>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ):(
         <div style={{display:"grid",gap:12}}>
           {projects.map(p=>{
             const rs=p.revisionSummary;
@@ -294,12 +330,9 @@ function ProjectsPage({user,onLogout}){
                       {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444444",color:B.cream,fontWeight:600}}>{p.job_number}</span>}
                       <span style={{fontWeight:600,fontSize:15,color:B.black}}>{p.site_address||p.name}</span>
                       {isTeam&&<button onClick={()=>openEdit(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:B.black2,padding:"0 4px"}}>✏</button>}
-                      <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:"1px solid "+B.tone1,fontWeight:500}}>
-                        {rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}
-                      </span>
+                      <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:"1px solid "+B.tone1,fontWeight:500}}>{rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}</span>
                     </div>
                     {p.client&&<p style={{fontSize:13,color:B.black2,margin:"0 0 4px"}}>Client: {p.client.name}</p>}
-                    {user.role==="client"&&projectStatuses[p.id]&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>{projectStatuses[p.id].stage&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:500}}>{projectStatuses[p.id].stage}</span>}{projectStatuses[p.id].timeline&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:500}}>{projectStatuses[p.id].timeline}</span>}</div>}
                     {p.description&&<p style={{fontSize:13,color:B.black2,margin:"0 0 6px"}}>{p.description}</p>}
                     <div style={{fontSize:12,color:B.black2,display:"flex",gap:16,flexWrap:"wrap"}}>
                       <span>{p.drawings?.length||0} drawing{p.drawings?.length!==1?"s":""}</span>
@@ -308,38 +341,16 @@ function ProjectsPage({user,onLogout}){
                     </div>
                   </div>
                   <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                    {isTeam&&(
-                      <>
-                        <button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button>
-                        <input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}}
-                          onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>
-                        {p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}
-                        <button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button>
-                      </>
-                    )}
-                    {(p.drawings?.length||0)>0&&(
-                      p.locked&&user.role==='client'
-                        ?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>
-                          {p.stripe_payment_link?"Pay to access plans":"Payment pending"}
-                        </a>
-                        :<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>
-                    )}
+                    {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
+                    {(p.drawings?.length||0)>0&&(p.locked&&user.role==='client'?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>{p.stripe_payment_link?"Pay to access plans":"Payment pending"}</a>:<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>)}
                   </div>
                 </div>
-                {p.drawings?.length>0&&(
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
-                    {p.drawings.map(d=>(
-                      <span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1,display:"inline-flex",alignItems:"center",gap:6}}>
-                        {d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}
-                        {isTeam&&<button onClick={e=>deleteDrawing(p.id,d.id,e)} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"0",lineHeight:1}}>✕</button>}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {p.drawings?.length>0&&(<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>{p.drawings.map(d=>(<span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1,display:"inline-flex",alignItems:"center",gap:6}}>{d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}{isTeam&&<button onClick={e=>deleteDrawing(p.id,d.id,e)} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"0",lineHeight:1}}>✕</button>}</span>))}</div>)}
               </div>
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );
@@ -491,7 +502,7 @@ function ProjectDetail({project,user,onBack}){
   const [revisionSummary,setRevisionSummary]=useState(project.revisionSummary);
   const [projectStatus,setProjectStatus]=useState(null);
   const [statusLoading,setStatusLoading]=useState(true);
-  const [showDashboard,setShowDashboard]=useState(true);
+  const [showDashboard,setShowDashboard]=useState(!project.skipDashboard);
 
   useEffect(()=>{
     api.getDrawings(project.id).then(d=>{
