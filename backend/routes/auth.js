@@ -72,7 +72,7 @@ router.post('/magic-link', async (req, res) => {
             This link expires in 48 hours.
           </p>
           <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
-            Access my plans →
+Access my portal →
           </a>
           <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
             If you didn't request this, you can safely ignore this email.
