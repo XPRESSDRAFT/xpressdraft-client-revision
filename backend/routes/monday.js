@@ -383,8 +383,7 @@ const session = event.data.object;
       return res.json({ received: true });
     }
 
-    // Retrieve full payment link URL from Stripe
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// Retrieve full payment link URL from Stripe
     let paymentLink = null;
     try {
       const pl = await stripe.paymentLinks.retrieve(paymentLinkId);
