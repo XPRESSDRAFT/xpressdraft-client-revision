@@ -308,7 +308,11 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
                         <button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button>
                       </>
                     )}
-                    {(p.drawings?.length||0)>0&&<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>}
+{(p.drawings?.length||0)>0&&(
+  p.locked&&user.role==='client'
+    ?<button onClick={()=>alert("Payment required. Please check your email for the payment link.")} style={{...btnPrimary,background:"#8B2020"}}>Payment required</button>
+    :<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>
+)}
                   </div>
                 </div>
                 {p.drawings?.length>0&&(
