@@ -8,7 +8,6 @@ const { auth } = require('../middleware/auth');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Monday column IDs
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
   deliveryFile:   'file_mm67ta3v',
@@ -17,6 +16,8 @@ const COL = {
   variationLink:  'link_mm64wrwb',
   revision:       'color_mky4x01c',
   stage:          'color_mky4a52f',
+  siteAddress:    'text_mky7ypsg',
+  jobNumber:      'text_mm06wmkq',
 };
 
 const APPROVAL_NOTE = `<p style="color:#5E635B;font-size:13px;line-height:1.6;margin-top:24px;padding:16px;background:#F3EAE5;border-radius:8px;border-left:3px solid #EA672F;">
@@ -65,7 +66,7 @@ async function getMondayFileUrl(itemId, columnId) {
     const parsed = JSON.parse(colVal.value);
     const files = parsed?.files || [];
     console.log('Files found:', files.length);
-   return files.map(f => ({
+    return files.map(f => ({
       name: f.name,
       url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`,
       asset_id: f.assetId
@@ -99,13 +100,39 @@ async function sendEmail(to, subject, html, attachments = []) {
   if (error) throw new Error(error.message);
 }
 
-function paymentEmailHtml(clientName, paymentLink, isWD = false) {
+async function getContractorFromProject(itemId) {
+  const data = await mondayApi(`{
+    items(ids: [${itemId}]) {
+      column_values(ids: ["board_relation_mky4dh21"]) {
+        ... on BoardRelationValue { linked_items { id name } }
+      }
+    }
+  }`);
+  const linkedItems = data?.data?.items?.[0]?.column_values?.[0]?.linked_items;
+  if (!linkedItems || linkedItems.length === 0) return null;
+  const contractorItemId = linkedItems[0].id;
+  const contractorData = await mondayApi(`{
+    items(ids: [${contractorItemId}]) {
+      name
+      column_values(ids: ["email_mkxzp1qw", "phone_mkxzazqw"]) { id text }
+    }
+  }`);
+  const contractorItem = contractorData?.data?.items?.[0];
+  if (!contractorItem) return null;
+  const cols = {};
+  contractorItem.column_values.forEach(c => { cols[c.id] = c.text || ''; });
+  return { name: contractorItem.name, email: cols['email_mkxzp1qw'], phone: cols['phone_mkxzazqw'] };
+}
+
+function paymentEmailHtml(clientName, paymentLink, isWD = false, projectRef = '') {
   return `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
     ${logoHtml}
+    ${projectRef ? `<p style="color:#EA672F;font-size:13px;font-weight:600;margin:0 0 8px;">${projectRef}</p>` : ''}
     <h2 style="color:#2A2B29;margin:0 0 16px;">Your ${isWD ? 'working drawings are' : 'plans are'} ready</h2>
-    <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:24px;">
+    <p style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:24px;">
       Hi ${clientName},<br/><br/>
-      Your ${isWD ? 'working drawings' : 'updated plans'} are ready. Please complete the payment below to access your files.
+      Your ${isWD ? 'working drawings' : 'updated plans'} are ready.<br/><br/>
+      Please complete the payment below to access your files.
     </p>
     <a href="${paymentLink}" style="${btnStyle}">Pay and access my ${isWD ? 'drawings' : 'plans'} →</a>
     ${APPROVAL_NOTE}
@@ -113,21 +140,20 @@ function paymentEmailHtml(clientName, paymentLink, isWD = false) {
   </div>`;
 }
 
-function firstDeliveryEmailHtml(clientName, portalUrl) {
+function firstDeliveryEmailHtml(clientName, portalUrl, projectRef = '') {
   return `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
     ${logoHtml}
+    ${projectRef ? `<p style="color:#EA672F;font-size:13px;font-weight:600;margin:0 0 8px;">${projectRef}</p>` : ''}
     <h2 style="color:#2A2B29;margin:0 0 16px;">Your plans are ready for review</h2>
-    <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:24px;">
+    <p style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:24px;">
       Hi ${clientName},<br/><br/>
-      Great news — your drawings are ready for your review. Please click below to access
-      the Xpress Draft portal, where you can view your plans, add comments and request changes.
+      Great news — your drawings are ready for your review.<br/><br/>
+      Please click below to access the Xpress Draft portal, where you can view your plans, add comments and request changes.
     </p>
-    <a href="${portalUrl}" style="${btnStyle}">Review my plans →</a>
-<p style="color:#5E635B;font-size:13px;line-height:1.6;">
+    <a href="${portalUrl}" style="${btnStyle}">Access my portal →</a>
+    <p style="color:#5E635B;font-size:13px;line-height:1.8;">
       Your plan includes <strong>2 complimentary revisions</strong> at the Preliminary stage
-      and <strong>1 revision</strong> at the Working Drawings stage.
-    </p>
-    <p style="color:#5E635B;font-size:13px;line-height:1.6;">
+      and <strong>1 revision</strong> at the Working Drawings stage.<br/><br/>
       If you are happy with the drawings, you can also click the <strong>Approve drawings</strong> button directly in the portal to confirm your approval and request the final set.
     </p>
     ${APPROVAL_NOTE}
@@ -135,16 +161,18 @@ function firstDeliveryEmailHtml(clientName, portalUrl) {
   </div>`;
 }
 
-function freeRevisionEmailHtml(clientName, portalUrl, isWD = false, dwgUrl = null) {
+function freeRevisionEmailHtml(clientName, portalUrl, isWD = false, dwgUrl = null, projectRef = '') {
   const dwgBtn = dwgUrl ? `<a href="${dwgUrl}" style="${btnStyle.replace('#EA672F','#2A2B29')}">Download DWG files →</a>` : '';
   return `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
     ${logoHtml}
+    ${projectRef ? `<p style="color:#EA672F;font-size:13px;font-weight:600;margin:0 0 8px;">${projectRef}</p>` : ''}
     <h2 style="color:#2A2B29;margin:0 0 16px;">Your updated ${isWD ? 'working drawings are' : 'plans are'} ready</h2>
-    <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:24px;">
+    <p style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:24px;">
       Hi ${clientName},<br/><br/>
-      We have updated your drawings based on your feedback. Please click below to review the changes.
+      We have updated your drawings based on your feedback.<br/><br/>
+      Please click below to review the changes.
     </p>
-    <a href="${portalUrl}" style="${btnStyle}">Review my ${isWD ? 'working drawings' : 'updated plans'} →</a>
+    <a href="${portalUrl}" style="${btnStyle}">Access my portal →</a>
     ${dwgBtn}
     ${APPROVAL_NOTE}
     ${footerHtml}
@@ -156,11 +184,12 @@ function portalAccessEmailHtml(clientName, portalUrl, isWD = false, dwgUrl = nul
   return `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
     ${logoHtml}
     <h2 style="color:#2A2B29;margin:0 0 16px;">Payment confirmed — your ${isWD ? 'working drawings are' : 'plans are'} ready</h2>
-    <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:24px;">
+    <p style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:24px;">
       Hi ${clientName},<br/><br/>
-      Thank you for your payment. Your ${isWD ? 'working drawings' : 'updated plans'} are now available.
+      Thank you for your payment.<br/><br/>
+      Your ${isWD ? 'working drawings' : 'updated plans'} are now available.
     </p>
-    <a href="${portalUrl}" style="${btnStyle}">Review my ${isWD ? 'working drawings' : 'plans'} →</a>
+    <a href="${portalUrl}" style="${btnStyle}">Access my portal →</a>
     ${dwgBtn}
     ${APPROVAL_NOTE}
     ${footerHtml}
@@ -192,10 +221,12 @@ router.post('/webhook', async (req, res) => {
     item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
 
     const jobNumber = item.name;
+    const siteAddress = cols[COL.siteAddress] || '';
+    const projectRef = siteAddress ? `${jobNumber} — ${siteAddress}` : jobNumber;
     const revisionLabel = (cols[COL.revision] || '').toUpperCase().trim();
     const stageLabel = (cols[COL.stage] || '').toUpperCase().trim();
-const partialPayment = (cols[COL.partialPayment] || '').trim();
-console.log('Partial payment value:', partialPayment);
+    const partialPayment = (cols[COL.partialPayment] || '').trim();
+    console.log('Partial payment value:', partialPayment);
     const finalPayment = (cols[COL.finalPayment] || '').trim();
     const variationLink = (cols[COL.variationLink] || '').trim();
 
@@ -218,6 +249,29 @@ console.log('Partial payment value:', partialPayment);
 
     const { name: clientName, email: clientEmail } = project.client;
 
+    // Link contractor if assigned in Monday
+    try {
+      const contractor = await getContractorFromProject(pulseId);
+      if (contractor && contractor.email) {
+        let { data: contractorUser } = await supabase
+          .from('users').select('*').eq('email', contractor.email.toLowerCase().trim()).single();
+        if (!contractorUser) {
+          const { data: newContractor } = await supabase
+            .from('users')
+            .insert({ name: contractor.name, email: contractor.email.toLowerCase().trim(), role: 'contractor', phone: contractor.phone || null })
+            .select().single();
+          contractorUser = newContractor;
+          console.log(`Created contractor: ${contractor.name}`);
+        }
+        if (contractorUser) {
+          await supabase.from('projects').update({ contractor_id: contractorUser.id }).eq('id', project.id);
+          console.log(`Linked contractor ${contractor.name} to project ${project.job_number}`);
+        }
+      }
+    } catch (e) {
+      console.error('Contractor linking error:', e.message);
+    }
+
     const files = await getMondayFileUrl(pulseId, COL.deliveryFile);
     const pdfFile = files.find(f => f.name?.toLowerCase().endsWith('.pdf'));
     const zipFile = files.find(f => f.name?.toLowerCase().endsWith('.zip') || f.name?.toLowerCase().endsWith('.dwg'));
@@ -225,7 +279,7 @@ console.log('Partial payment value:', partialPayment);
     let pdfDrawingId = null;
     if (pdfFile) {
       try {
-const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
+        const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
         const assetData = await mondayApi(assetQuery);
         const publicUrl = assetData?.data?.assets?.[0]?.public_url;
         console.log('Asset public URL:', publicUrl);
@@ -294,41 +348,41 @@ const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
     if (isFirstIssue && !isWD && partialPayment) {
       deliveryType = 'pr_first_payment';
       paymentLink = partialPayment;
-      emailSubject = 'Your plans are ready — Xpress Draft';
-      emailHtml = paymentEmailHtml(clientName, partialPayment, false);
+      emailSubject = `Your plans are ready — ${projectRef}`;
+      emailHtml = paymentEmailHtml(clientName, partialPayment, false, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: partialPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && finalPayment && !isFirstIssue) {
       deliveryType = 'wd_final_payment';
       paymentLink = finalPayment;
-      emailSubject = 'Your working drawings are ready — Xpress Draft';
-      emailHtml = paymentEmailHtml(clientName, finalPayment, true);
+      emailSubject = `Your working drawings are ready — ${projectRef}`;
+      emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && finalPayment && isFirstIssue) {
       deliveryType = 'wd_first_payment';
       paymentLink = finalPayment;
-      emailSubject = 'Your working drawings are ready — Xpress Draft';
-      emailHtml = paymentEmailHtml(clientName, finalPayment, true);
+      emailSubject = `Your working drawings are ready — ${projectRef}`;
+      emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && isFirstIssue && !finalPayment) {
       deliveryType = 'wd_first_free';
-      emailSubject = 'Your working drawings are ready for review — Xpress Draft';
-      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl);
+      emailSubject = `Your working drawings are ready for review — ${projectRef}`;
+      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl, projectRef);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     } else if (!isFirstIssue && variationLink) {
       deliveryType = 'variation_payment';
       paymentLink = variationLink;
-      emailSubject = 'Your updated plans are ready — payment required';
-      emailHtml = paymentEmailHtml(clientName, variationLink, isWD);
+      emailSubject = `Your updated plans are ready — payment required — ${projectRef}`;
+      emailHtml = paymentEmailHtml(clientName, variationLink, isWD, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: variationLink, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isFirstIssue && !isWD && !partialPayment) {
       deliveryType = 'pr_first_free';
-      emailSubject = 'Your plans are ready for review — Xpress Draft';
-      emailHtml = firstDeliveryEmailHtml(clientName, portalUrl);
+      emailSubject = `Your plans are ready for review — ${projectRef}`;
+      emailHtml = firstDeliveryEmailHtml(clientName, portalUrl, projectRef);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     } else {
       deliveryType = isWD ? 'wd_free_revision' : 'pr_free_revision';
-      emailSubject = `Your updated ${isWD ? 'working drawings' : 'plans'} are ready — Xpress Draft`;
-      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl);
+      emailSubject = `Your updated ${isWD ? 'working drawings' : 'plans'} are ready — ${projectRef}`;
+      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl, projectRef);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     }
 
@@ -360,7 +414,6 @@ router.post('/stripe-webhook', async (req, res) => {
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
     const sig = req.headers['stripe-signature'];
     let event;
-
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
     } catch (err) {
@@ -374,7 +427,7 @@ router.post('/stripe-webhook', async (req, res) => {
       return res.json({ received: true });
     }
 
-const session = event.data.object;
+    const session = event.data.object;
     const paymentLinkId = session.payment_link;
 
     console.log('Payment link ID:', paymentLinkId);
@@ -384,7 +437,6 @@ const session = event.data.object;
       return res.json({ received: true });
     }
 
-// Retrieve full payment link URL from Stripe
     let paymentLink = null;
     try {
       const pl = await stripe.paymentLinks.retrieve(paymentLinkId);
@@ -394,7 +446,7 @@ const session = event.data.object;
       console.log('Could not retrieve payment link URL:', e.message);
     }
 
-const { data: project, error: projectError } = await supabase
+    const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
       .eq('stripe_payment_link', paymentLink)
@@ -471,10 +523,8 @@ router.post('/approve', auth, async (req, res) => {
       subject: `Drawings approved — ${jobNumber}`,
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
         <h2 style="color:#2A2B29;">Drawings Approved</h2>
-        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
-          <strong>${clientName}</strong> has approved the drawings for <strong>${jobNumber}</strong>.
-        </p>
-        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
+        <p style="color:#5E635B;font-size:15px;line-height:1.8;">
+          <strong>${clientName}</strong> has approved the drawings for <strong>${jobNumber}</strong>.<br/><br/>
           Client message: <em>"I approve the drawings. Please proceed to final set."</em>
         </p>
         <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}"
@@ -509,8 +559,8 @@ router.post('/approve', auth, async (req, res) => {
 router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   console.log('SUBMIT MARKUP HIT');
   try {
-const { projectId, commentSummary } = req.body;
-console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO FILE');
+    const { projectId, commentSummary } = req.body;
+    console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO FILE');
     console.log('Submit markup for project:', projectId);
     const pdfBuffer = req.file?.buffer;
 
@@ -529,7 +579,6 @@ console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO 
     const jobNumber = project.job_number || project.name;
     const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
 
-const axios = require('axios');
     const FormDataNode = require('form-data');
     const mondayForm = new FormDataNode();
     mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id } }`);
@@ -537,6 +586,7 @@ const axios = require('axios');
     mondayForm.append('map', JSON.stringify({ file: ['variables.file'] }));
     mondayForm.append('file', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
 
+    const axios = require('axios');
     const uploadRes = await axios.post('https://api.monday.com/v2/file', mondayForm, {
       headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...mondayForm.getHeaders() }
     });
@@ -544,7 +594,7 @@ const axios = require('axios');
 
     console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
 
-const moveResult = await mondayApi(`mutation {
+    const moveResult = await mondayApi(`mutation {
       move_item_to_group(
         item_id: ${project.monday_item_id},
         group_id: "group_title"
@@ -572,11 +622,9 @@ const moveResult = await mondayApi(`mutation {
       subject: `Client markup submitted — ${jobNumber}`,
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
         <h2 style="color:#2A2B29;">Client markup submitted</h2>
-        <p style="color:#5E635B;font-size:15px;line-height:1.6;">
-          <strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.
-        </p>
-        <p style="color:#5E635B;font-size:14px;line-height:1.6;">
-          The marked-up PDF has been uploaded to Monday under the Instructions column.
+        <p style="color:#5E635B;font-size:15px;line-height:1.8;">
+          <strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>
+          The marked-up PDF has been uploaded to Monday under the Instructions column.<br/><br/>
           The item has been moved to <strong>TO BE REVIEWED</strong>.
         </p>
         ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin-top:16px;border-left:3px solid #EA672F;">
