@@ -373,16 +373,27 @@ router.post('/stripe-webhook', async (req, res) => {
       return res.json({ received: true });
     }
 
-    const session = event.data.object;
-    const paymentLink = session.payment_link || session.url;
+const session = event.data.object;
+    const paymentLinkId = session.payment_link;
+    const paymentUrl = session.url;
 
-    console.log('Payment link from Stripe:', paymentLink);
+    console.log('Payment link ID:', paymentLinkId, 'URL:', paymentUrl);
 
-    const { data: project } = await supabase
+    // Try matching by full URL first, then by ID suffix
+    let { data: project } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
-      .eq('stripe_payment_link', paymentLink)
+      .ilike('stripe_payment_link', `%${paymentLinkId}%`)
       .single();
+
+    if (!project && paymentUrl) {
+      const result = await supabase
+        .from('projects')
+        .select('*, client:users!projects_client_id_fkey(id, name, email)')
+        .ilike('stripe_payment_link', `%${paymentUrl}%`)
+        .single();
+      project = result.data;
+    }
 
     if (!project || !project.client) {
       console.log('No project found for payment link:', paymentLink);
