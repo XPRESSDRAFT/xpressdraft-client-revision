@@ -525,9 +525,16 @@ function ProjectDetail({project,user,onBack}){
             </div>
           ))}
         </div>
-        {activeDrawing
-          ?<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)}/>
-          :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:B.black2}}>{loading?"Loading...":"No drawings"}</div>
+{activeDrawing && project.locked && user.role === 'client'
+          ?<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:B.cream,gap:16,padding:40}}>
+            <div style={{fontSize:32}}>🔒</div>
+            <h2 style={{color:B.black,margin:0,fontSize:20}}>Payment required</h2>
+            <p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:400,lineHeight:1.6}}>Your drawings are ready but require payment before access. Please check your email for the payment link.</p>
+            <a href="mailto:info@xpressdraft.com.au" style={{color:B.orange,fontSize:13}}>Contact us at info@xpressdraft.com.au</a>
+          </div>
+          :activeDrawing
+            ?<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)}/>
+            :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:B.black2}}>{loading?"Loading...":"No drawings"}</div>
         }
       </div>
     </div>
