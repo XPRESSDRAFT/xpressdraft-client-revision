@@ -356,7 +356,6 @@ const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
 
 router.post('/stripe-webhook', async (req, res) => {
   try {
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
     const sig = req.headers['stripe-signature'];
     let event;
 
