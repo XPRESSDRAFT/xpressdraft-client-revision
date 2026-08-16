@@ -309,8 +309,10 @@ if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUse
                       </>
                     )}
 {(p.drawings?.length||0)>0&&(
-  p.locked&&user.role==='client'
-    ?<button onClick={()=>alert("Payment required. Please check your email for the payment link.")} style={{...btnPrimary,background:"#8B2020"}}>Payment required</button>
+p.locked&&user.role==='client'
+    ?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>
+      {p.stripe_payment_link?"Pay to access plans":"Payment pending"}
+    </a>
     :<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>
 )}
                   </div>
