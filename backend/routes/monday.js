@@ -356,13 +356,81 @@ const assetQuery = `{ assets(ids: [${pdfFile.asset_id}]) { public_url } }`;
 
 router.post('/stripe-webhook', async (req, res) => {
   try {
-    const event = req.body;
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error('Stripe signature error:', err.message);
+      return res.status(400).json({ error: err.message });
+    }
+
+    console.log('Stripe event type:', event.type);
+
     if (event.type !== 'checkout.session.completed' && event.type !== 'payment_intent.succeeded') {
       return res.json({ received: true });
     }
 
     const session = event.data.object;
-    const paymentLink = session.url || session.payment_link;
+    const paymentLink = session.payment_link || session.url;
+
+    console.log('Payment link from Stripe:', paymentLink);
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('*, client:users!projects_client_id_fkey(id, name, email)')
+      .eq('stripe_payment_link', paymentLink)
+      .single();
+
+    if (!project || !project.client) {
+      console.log('No project found for payment link:', paymentLink);
+      return res.json({ received: true });
+    }
+
+    const { name: clientName, email: clientEmail } = project.client;
+    const isWD = project.stage === 'working_drawings';
+
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await supabase.from('magic_links').insert({ email: clientEmail, token, expires_at: expiresAt.toISOString() });
+    const portalUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
+
+    let dwgDownloadUrl = null;
+    if (isWD && project.monday_item_id) {
+      const files = await getMondayFileUrl(project.monday_item_id, COL.deliveryFile);
+      const zipFile = files.find(f => f.name?.toLowerCase().endsWith('.zip') || f.name?.toLowerCase().endsWith('.dwg'));
+      if (zipFile) {
+        const { data: urlData } = supabase.storage.from('drawings').getPublicUrl(`${project.id}/${zipFile.name}`);
+        dwgDownloadUrl = urlData?.publicUrl;
+      }
+    }
+
+    await supabase.from('projects').update({ locked: false, stripe_payment_link: null }).eq('id', project.id);
+
+    await sendEmail(
+      clientEmail,
+      `Payment confirmed — your ${isWD ? 'working drawings are' : 'plans are'} ready — Xpress Draft`,
+      portalAccessEmailHtml(clientName, portalUrl, isWD, dwgDownloadUrl)
+    );
+
+    if (project.monday_item_id) {
+      await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'PAID');
+      setTimeout(async () => {
+        await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'UNDER REVIEW');
+      }, 3000);
+    }
+
+    console.log(`Portal access sent after payment to ${clientEmail}`);
+    res.json({ received: true });
+
+  } catch (err) {
+    console.error('Stripe webhook error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
     const { data: project } = await supabase
       .from('projects')
