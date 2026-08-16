@@ -394,11 +394,12 @@ const session = event.data.object;
       console.log('Could not retrieve payment link URL:', e.message);
     }
 
-    const { data: project } = await supabase
+const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
-      .ilike('stripe_payment_link', `%${paymentLinkId}%`)
+      .eq('stripe_payment_link', paymentLink)
       .single();
+    console.log('Project search result:', project?.job_number, 'error:', projectError?.message);
 
     if (!project || !project.client) {
       console.log('No project found for payment link:', paymentLink);
