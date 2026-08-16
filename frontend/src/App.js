@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from "react-router-dom";
 import * as api from "./api";
 import DrawingView from "./DrawingView";
+import ContractorPortal from "./ContractorPortal";
 
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
@@ -23,7 +24,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/auth/verify" element={<VerifyPage onLogin={setUser}/>}/>
-        <Route path="/*" element={user?<ProjectsPage user={user} onLogout={()=>{localStorage.removeItem("xpd_token");setUser(null);}}/>:<LoginPage onLogin={setUser}/>}/>
+        <Route path="/*" element={user?user.role==="contractor"?<ContractorPortal user={user} onLogout={()=>{localStorage.removeItem("xpd_token");setUser(null);}}/>:<ProjectsPage user={user} onLogout={()=>{localStorage.removeItem("xpd_token");setUser(null);}}/>:<LoginPage onLogin={setUser}/>}/>
       </Routes>
     </BrowserRouter>
   );
@@ -107,7 +108,6 @@ function ProjectsPage({user,onLogout}){
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
   const [showHealth,setShowHealth]=useState(false);
-  const [projectStatuses,setProjectStatuses]=useState({});
   const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
@@ -116,6 +116,7 @@ function ProjectsPage({user,onLogout}){
   const [editClientId,setEditClientId]=useState("");
   const [editContractorId,setEditContractorId]=useState("");
   const [editAssignedTo,setEditAssignedTo]=useState("");
+  const [projectStatuses,setProjectStatuses]=useState({});
   const fileRefs=useRef({});
 
   useEffect(()=>{
@@ -252,7 +253,6 @@ function ProjectsPage({user,onLogout}){
           </div>
           {isTeam&&<button onClick={()=>setShowNew(v=>!v)} style={{marginLeft:"auto",padding:"8px 16px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600}}>+ New project</button>}
         </div>
-
         {showNew&&(
           <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:20,borderLeft:"3px solid "+B.orange}}>
             <p style={{fontWeight:600,color:B.black,margin:"0 0 12px"}}>New project</p>
@@ -279,9 +279,7 @@ function ProjectsPage({user,onLogout}){
             </div>
           </div>
         )}
-
         {loading&&<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading projects...</div>}
-
         {user.role==="client"?(
           <div style={{display:"grid",gap:16}}>
             {projects.map(p=>{
@@ -307,6 +305,7 @@ function ProjectsPage({user,onLogout}){
                       {timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:10,height:10,borderRadius:"50%",background:i<step?"#639922":i===step?B.orange:B.tone1,border:i===step?"2px solid "+B.orange:"none"}}/><div style={{fontSize:7,color:i<=step?B.black:B.black2,marginTop:3,textAlign:"center",maxWidth:40,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step?"#639922":B.tone1,marginBottom:14,minWidth:6}}/>}</div>))}
                     </div>
                   </div>
+                  {ps?.designerName&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:B.cream,borderRadius:8,marginBottom:12,border:"1px solid "+B.tone1}}><div style={{width:36,height:36,borderRadius:"50%",background:B.orange,display:"flex",alignItems:"center",justifyContent:"center",color:B.white,fontWeight:700,fontSize:14,flexShrink:0}}>{ps.designerName.charAt(0)}</div><div><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.05em"}}>ASSIGNED DESIGNER</div><div style={{fontSize:13,fontWeight:600,color:B.black}}>Xpress Draft</div>{ps.designerPhone&&<div style={{fontSize:12,color:B.black2}}>{ps.designerPhone}</div>}</div></div>}
                   <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                     {p.locked&&p.stripe_payment_link
                       ?<a href={p.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none",fontSize:13}}>Pay to access plans →</a>
@@ -318,38 +317,38 @@ function ProjectsPage({user,onLogout}){
             })}
           </div>
         ):(
-        <div style={{display:"grid",gap:12}}>
-          {projects.map(p=>{
-            const rs=p.revisionSummary;
-            const totalComments=(p.drawings||[]).reduce((a,d)=>a+(d.comments||[]).length,0);
-            return(
-              <div key={p.id} style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem 1.5rem"}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                      {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444444",color:B.cream,fontWeight:600}}>{p.job_number}</span>}
-                      <span style={{fontWeight:600,fontSize:15,color:B.black}}>{p.site_address||p.name}</span>
-                      {isTeam&&<button onClick={()=>openEdit(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:B.black2,padding:"0 4px"}}>✏</button>}
-                      <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:"1px solid "+B.tone1,fontWeight:500}}>{rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}</span>
+          <div style={{display:"grid",gap:12}}>
+            {projects.map(p=>{
+              const rs=p.revisionSummary;
+              const totalComments=(p.drawings||[]).reduce((a,d)=>a+(d.comments||[]).length,0);
+              return(
+                <div key={p.id} style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem 1.5rem"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                        {p.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444444",color:B.cream,fontWeight:600}}>{p.job_number}</span>}
+                        <span style={{fontWeight:600,fontSize:15,color:B.black}}>{p.site_address||p.name}</span>
+                        {isTeam&&<button onClick={()=>openEdit(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:B.black2,padding:"0 4px"}}>✏</button>}
+                        <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black2,border:"1px solid "+B.tone1,fontWeight:500}}>{rs?.stageLabel==="PR"?"Preliminary":"Working Drawings"}</span>
+                      </div>
+                      {p.client&&<p style={{fontSize:13,color:B.black2,margin:"0 0 4px"}}>Client: {p.client.name}</p>}
+                      {p.description&&<p style={{fontSize:13,color:B.black2,margin:"0 0 6px"}}>{p.description}</p>}
+                      <div style={{fontSize:12,color:B.black2,display:"flex",gap:16,flexWrap:"wrap"}}>
+                        <span>{p.drawings?.length||0} drawing{p.drawings?.length!==1?"s":""}</span>
+                        <span>{totalComments} comment{totalComments!==1?"s":""}</span>
+                        {rs&&<span style={{color:rs.overAllowance?"#8B2020":rs.used===rs.totalAllowed?B.orange:B.black2,fontWeight:rs.used>0?500:400}}>{rs.displayText} revisions</span>}
+                      </div>
                     </div>
-                    {p.client&&<p style={{fontSize:13,color:B.black2,margin:"0 0 4px"}}>Client: {p.client.name}</p>}
-                    {p.description&&<p style={{fontSize:13,color:B.black2,margin:"0 0 6px"}}>{p.description}</p>}
-                    <div style={{fontSize:12,color:B.black2,display:"flex",gap:16,flexWrap:"wrap"}}>
-                      <span>{p.drawings?.length||0} drawing{p.drawings?.length!==1?"s":""}</span>
-                      <span>{totalComments} comment{totalComments!==1?"s":""}</span>
-                      {rs&&<span style={{color:rs.overAllowance?"#8B2020":rs.used===rs.totalAllowed?B.orange:B.black2,fontWeight:rs.used>0?500:400}}>{rs.displayText} revisions</span>}
+                    <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                      {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
+                      {(p.drawings?.length||0)>0&&(p.locked&&user.role==='client'?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>{p.stripe_payment_link?"Pay to access plans":"Payment pending"}</a>:<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>)}
                     </div>
                   </div>
-                  <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                    {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
-                    {(p.drawings?.length||0)>0&&(p.locked&&user.role==='client'?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>{p.stripe_payment_link?"Pay to access plans":"Payment pending"}</a>:<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>)}
-                  </div>
+                  {p.drawings?.length>0&&(<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>{p.drawings.map(d=>(<span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1,display:"inline-flex",alignItems:"center",gap:6}}>{d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}{isTeam&&<button onClick={e=>deleteDrawing(p.id,d.id,e)} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"0",lineHeight:1}}>✕</button>}</span>))}</div>)}
                 </div>
-                {p.drawings?.length>0&&(<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>{p.drawings.map(d=>(<span key={d.id} style={{fontSize:12,padding:"3px 10px",background:B.cream,borderRadius:20,color:B.black1,border:"1px solid "+B.tone1,display:"inline-flex",alignItems:"center",gap:6}}>{d.name}{d.comments?.length>0?" · "+d.comments.length+" comment"+(d.comments.length!==1?"s":""):""}{isTeam&&<button onClick={e=>deleteDrawing(p.id,d.id,e)} style={{background:"none",border:"none",cursor:"pointer",color:"#8B2020",fontSize:11,padding:"0",lineHeight:1}}>✕</button>}</span>))}</div>)}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -478,22 +477,19 @@ function AdminPage({user,onBack}){
 function SystemHealthPage({onBack}){
   const [health,setHealth]=useState(null);
   const [loading,setLoading]=useState(true);
-
   useEffect(()=>{
     fetch((process.env.REACT_APP_API_URL||"")+"/api/health/system",{
       headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
     }).then(r=>r.json()).then(d=>{setHealth(d);setLoading(false);}).catch(()=>setLoading(false));
   },[]);
-
   const Card=({title,status,items,link,linkLabel})=>(<div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:15,fontWeight:600,color:B.black}}>{title}</h3><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:status==="ok"?"#639922":status==="warn"?"#fdab3d":"#E24B4A"}}/><span style={{fontSize:12,color:B.black2}}>{status==="ok"?"Healthy":status==="warn"?"Check soon":"Action needed"}</span></div></div>{items.map((item,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<items.length-1?"1px solid "+B.cream:"none"}}><span style={{fontSize:13,color:B.black2}}>{item.label}</span><span style={{fontSize:13,fontWeight:500,color:item.warn?"#E24B4A":B.black}}>{item.value}</span></div>))}{link&&<a href={link} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:12,fontSize:12,color:B.orange,textDecoration:"none"}}>{linkLabel||"Open dashboard"} →</a>}</div>);
-
   const supabaseItems=health?[{label:"Storage used",value:health.supabase?.storageUsed||"—"},{label:"Storage limit",value:"1 GB (free tier)"},{label:"Database rows",value:health.supabase?.rows||"—"},{label:"MAU limit",value:"50,000 (free tier)"}]:[{label:"Loading...",value:""}];
   const resendItems=health?[{label:"Emails sent this month",value:health.resend?.sent||"—"},{label:"Monthly limit",value:"3,000 (free tier)"},{label:"Domain",value:"xpressdraft.com.au — Verified"}]:[{label:"Loading...",value:""}];
   const renderItems=[{label:"Backend",value:"xpressdraft-api (Free)"},{label:"Frontend",value:"xpressdraft-frontend (Free)"},{label:"Cold start delay",value:"~30 seconds after inactivity"},{label:"Recommendation",value:"Upgrade to Starter ($7/mo) to remove cold starts",warn:true}];
   const anthropicItems=[{label:"Model",value:"claude-sonnet-4-6"},{label:"Billing",value:"Pay per use"},{label:"Recommendation",value:"Set a monthly spend limit in Anthropic console"}];
   const mondayItems=[{label:"Board ID",value:"18388615760"},{label:"Webhook",value:"Active — DELIVERY STATUS"},{label:"Recommendation",value:"Verify API access is included in your Monday plan"}];
-
-  return(<div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}><nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}><XPDLogo size={40} variant="white"/><span style={{color:B.black2,marginLeft:8,fontSize:13}}>System Health</span><button onClick={onBack} style={{marginLeft:"auto",background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Back</button></nav><div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}><div style={{marginBottom:24}}><h1 style={{fontSize:22,fontWeight:600,color:B.black,margin:"0 0 4px"}}>System Health</h1><p style={{fontSize:13,color:B.black2,margin:0}}>Monitor service limits and plan usage across all suppliers.</p></div>{loading?<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>:<><Card title="Supabase — Database & Storage" status={health?.supabase?.warn?"warn":"ok"} items={supabaseItems} link="https://supabase.com/dashboard/project/xitgnfstcfbaoxqbwxug" linkLabel="Open Supabase"/><Card title="Resend — Email" status={health?.resend?.warn?"warn":"ok"} items={resendItems} link="https://resend.com/overview" linkLabel="Open Resend"/><Card title="Render — Hosting" status="warn" items={renderItems} link="https://dashboard.render.com" linkLabel="Open Render"/><Card title="Anthropic — AI" status="ok" items={anthropicItems} link="https://console.anthropic.com" linkLabel="Open Anthropic"/><Card title="Monday.com — Job Management" status="ok" items={mondayItems} link="https://xpressdraft.monday.com" linkLabel="Open Monday"/></>}</div></div>);}
+  return(<div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}><nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}><XPDLogo size={40} variant="white"/><span style={{color:B.black2,marginLeft:8,fontSize:13}}>System Health</span><button onClick={onBack} style={{marginLeft:"auto",background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Back</button></nav><div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}><div style={{marginBottom:24}}><h1 style={{fontSize:22,fontWeight:600,color:B.black,margin:"0 0 4px"}}>System Health</h1><p style={{fontSize:13,color:B.black2,margin:0}}>Monitor service limits and plan usage across all suppliers.</p></div>{loading?<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>:<><Card title="Supabase — Database & Storage" status={health?.supabase?.warn?"warn":"ok"} items={supabaseItems} link="https://supabase.com/dashboard/project/xitgnfstcfbaoxqbwxug" linkLabel="Open Supabase"/><Card title="Resend — Email" status={health?.resend?.warn?"warn":"ok"} items={resendItems} link="https://resend.com/overview" linkLabel="Open Resend"/><Card title="Render — Hosting" status="warn" items={renderItems} link="https://dashboard.render.com" linkLabel="Open Render"/><Card title="Anthropic — AI" status="ok" items={anthropicItems} link="https://console.anthropic.com" linkLabel="Open Anthropic"/><Card title="Monday.com — Job Management" status="ok" items={mondayItems} link="https://xpressdraft.monday.com" linkLabel="Open Monday"/></>}</div></div>);
+}
 
 function ProjectDetail({project,user,onBack}){
   const [drawings,setDrawings]=useState([]);
@@ -524,24 +520,29 @@ function ProjectDetail({project,user,onBack}){
   const rs=revisionSummary;
   const isTeam=user.role==="team"||user.role==="admin";
 
-  // Client dashboard
   if(user.role==="client"&&showDashboard){
     const timelineSteps=["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
-    const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):-1;
+    const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):0;
+    const step=currentStep>=0?currentStep:0;
     return(
       <div style={{minHeight:"100vh",background:B.white,fontFamily:"Manrope,sans-serif"}}>
         <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>← Back to projects</button>
         </nav>
         <div style={{maxWidth:"100%",padding:"2rem 32px"}}>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:40,gap:24}}><div><XPDLogo size={48} variant="color"/><div style={{marginTop:16}}>{project.job_number&&<span style={{fontSize:12,padding:"2px 10px",borderRadius:20,background:B.orange,color:B.white,fontWeight:600}}>{project.job_number}</span>}<h1 style={{fontSize:22,fontWeight:700,color:B.black,margin:"8px 0 4px"}}>{project.site_address||project.name}</h1><p style={{fontSize:13,color:B.black2,margin:0}}>Client Portal</p></div></div></div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:32}}>{[{label:"Stage",value:statusLoading?"…":projectStatus?.stage||"Setup",bg:"#FEF3E8",color:B.orange,border:"1px solid "+B.tone1},{label:"Revision",value:statusLoading?"…":projectStatus?.revision||"—",bg:B.cream,color:B.black1,border:"1px solid "+B.tone1},{label:"Timeline",value:statusLoading?"…":projectStatus?.timeline||"STARTED",bg:"#EBF3FE",color:"#1A4A8A",border:"1px solid #C5DCF5"}].map((s,i)=>(<div key={i} style={{background:s.bg,border:s.border,borderRadius:12,padding:"20px 16px",textAlign:"center"}}><div style={{fontSize:11,color:B.tone2,fontWeight:600,letterSpacing:"0.08em",marginBottom:8}}>{s.label.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.value}</div></div>))}</div>
-
-          {(()=>{const step=currentStep>=0?currentStep:0;return(<div style={{background:B.cream,borderRadius:12,padding:"20px 24px",marginBottom:32,border:"1px solid "+B.tone1}}><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.08em",marginBottom:16}}>PROJECT PROGRESS</div><div style={{display:"flex",alignItems:"center",overflowX:"auto"}}>{timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:12,height:12,borderRadius:"50%",background:i<step?"#639922":i===step?B.orange:B.tone1,border:i===step?"2px solid "+B.orange:"none"}}/><div style={{fontSize:8,color:i<=step?B.black:B.black2,marginTop:4,textAlign:"center",maxWidth:48,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step?"#639922":B.tone1,marginBottom:16,minWidth:8}}/>}</div>))}</div></div>);})()}
-
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:40,gap:24}}>
+            <div>
+              <XPDLogo size={48} variant="color"/>
+              <div style={{marginTop:16}}>
+                {project.job_number&&<span style={{fontSize:12,padding:"2px 10px",borderRadius:20,background:B.orange,color:B.white,fontWeight:600}}>{project.job_number}</span>}
+                <h1 style={{fontSize:22,fontWeight:700,color:B.black,margin:"8px 0 4px"}}>{project.site_address||project.name}</h1>
+                <p style={{fontSize:13,color:B.black2,margin:0}}>Client Portal</p>
+              </div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:32}}>{[{label:"Stage",value:statusLoading?"…":projectStatus?.stage||"Setup",bg:"#FEF3E8",color:B.orange,border:"1px solid "+B.tone1},{label:"Revision",value:statusLoading?"…":projectStatus?.revision||"—",bg:B.cream,color:B.black1,border:"1px solid "+B.tone1},{label:"Timeline",value:statusLoading?"…":projectStatus?.timeline||"STARTED",bg:"#EBF3FE",color:"#1A4A8A",border:"1px solid #C5DCF5"}].map((s,i)=>(<div key={i} style={{background:s.bg,border:s.border,borderRadius:12,padding:"20px 16px",textAlign:"center"}}><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.08em",marginBottom:8}}>{s.label.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.value}</div></div>))}</div>
+          {(()=>{const step2=currentStep>=0?currentStep:0;return(<div style={{background:B.cream,borderRadius:12,padding:"20px 24px",marginBottom:32,border:"1px solid "+B.tone1}}><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.08em",marginBottom:16}}>PROJECT PROGRESS</div><div style={{display:"flex",alignItems:"center",overflowX:"auto"}}>{timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:12,height:12,borderRadius:"50%",background:i<step2?"#639922":i===step2?B.orange:B.tone1,border:i===step2?"2px solid "+B.orange:"none"}}/><div style={{fontSize:8,color:i<=step2?B.black:B.black2,marginTop:4,textAlign:"center",maxWidth:48,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step2?"#639922":B.tone1,marginBottom:16,minWidth:8}}/>}</div>))}</div></div>);})()}
           {!statusLoading&&!projectStatus?.stage&&(<div style={{background:B.cream,borderRadius:12,padding:"24px",marginBottom:32,border:"1px solid "+B.tone1,textAlign:"center"}}><p style={{color:B.black2,fontSize:14,lineHeight:1.8,margin:0}}>Your project is in the setup stage — our team is reviewing your brief, getting familiar with the site and preparing everything before we begin drafting.<br/><br/>You'll be notified as soon as your drawings are ready for review.</p></div>)}
-
           <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>{drawings.length>0&&!project.locked&&<button onClick={()=>setShowDashboard(false)} style={{...btnPrimary,fontSize:15,padding:"14px 32px"}}>Review my drawings →</button>}{project.locked&&project.stripe_payment_link&&<a href={project.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#8B2020",textDecoration:"none"}}>Pay to access plans →</a>}{drawings.length>0&&!project.locked&&<button onClick={async()=>{if(!window.confirm("Approve drawings?\n\nThis will send a confirmation to Xpress Draft to proceed to the final set."))return;try{await fetch((process.env.REACT_APP_API_URL||"")+"/api/monday/approve",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({projectId:project.id})});alert("Your approval has been sent.");}catch(e){alert("Error: "+e.message);}}} style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#2E5C10",border:"2px solid #639922"}}>Approve drawings ✓</button>}</div>
         </div>
       </div>
