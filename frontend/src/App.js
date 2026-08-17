@@ -160,10 +160,11 @@ function ProjectsPage({user,onLogout}){
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
 
-  const unlockProject=async(p)=>{
+const unlockProject=async(p)=>{
     if(!window.confirm("Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment."))return;
     await api.updateProject(p.id,{locked:false,stripePaymentLink:null});
     const d=await api.getProjects();setProjects(d.projects);
+    alert((p.job_number||p.name)+" has been unlocked. The client can now access their plans.");
   };
 
   const openEdit=(p)=>{
