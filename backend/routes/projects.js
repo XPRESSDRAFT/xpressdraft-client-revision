@@ -61,10 +61,64 @@ router.post('/', auth, async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // New project created with a contractor already assigned — make sure a
+    // contractor_jobs row exists so it shows up in their portal.
+    if (data.contractor_id) {
+      await ensureContractorJob(data.id, data.contractor_id);
+    }
+
     res.status(201).json({ project: { ...data, revisionSummary: buildRevisionSummary(data.stage, []) } });
   } catch (err) {
     console.error('Create project error:', err);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Admin-only backfill: scans every project that has a contractor_id set and
+// makes sure a matching contractor_jobs row exists, creating one (status
+// 'pending') where it's missing. Covers assignments made before the
+// auto-create logic below existed, or any other gap. Safe to run repeatedly.
+router.post('/sync-contractor-jobs', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    const { data: assignedProjects, error } = await supabase
+      .from('projects')
+      .select('id, contractor_id, job_number, name')
+      .not('contractor_id', 'is', null);
+    if (error) throw error;
+
+    let created = 0;
+    let alreadyLinked = 0;
+    const results = [];
+
+    for (const p of (assignedProjects || [])) {
+      const before = await supabase
+        .from('contractor_jobs')
+        .select('id')
+        .eq('project_id', p.id)
+        .eq('contractor_id', p.contractor_id)
+        .maybeSingle();
+
+      if (before.data) {
+        alreadyLinked++;
+        continue;
+      }
+
+      const job = await ensureContractorJob(p.id, p.contractor_id);
+      if (job) {
+        created++;
+        results.push({ projectId: p.id, jobNumber: p.job_number, name: p.name });
+      }
+    }
+
+    res.json({ scanned: (assignedProjects || []).length, created, alreadyLinked, results });
+  } catch (err) {
+    console.error('Sync contractor jobs error:', err);
+    res.status(500).json({ error: 'Failed to sync contractor jobs' });
   }
 });
 
@@ -103,6 +157,13 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo } = req.body;
+
+    // Grab the current contractor_id before overwriting it, so we know
+    // whether this update is actually assigning a *new* contractor.
+    const { data: existingProject } = await supabase
+      .from('projects').select('contractor_id').eq('id', req.params.id).single();
+    const previousContractorId = existingProject?.contractor_id || null;
+
     const updates = { updated_at: new Date().toISOString() };
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
@@ -117,6 +178,15 @@ router.put('/:id', auth, async (req, res) => {
       .from('projects').update(updates).eq('id', req.params.id)
       .select(`*, client:users!projects_client_id_fkey(id, name, email)`).single();
     if (error) throw error;
+
+    // If a contractor was newly assigned (or changed) via this update,
+    // make sure a contractor_jobs row exists for them on this project —
+    // otherwise they'd never see it in their portal. The previous
+    // contractor's job row (if any) is left untouched as history.
+    if (contractorId !== undefined && contractorId && contractorId !== previousContractorId) {
+      await ensureContractorJob(req.params.id, contractorId);
+    }
+
     res.json({ project: data });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update project' });
@@ -172,6 +242,36 @@ router.post('/:id/markup-export', auth, async (req, res) => {
     res.status(500).json({ error: 'Failed to update export count' });
   }
 });
+
+// Ensures a contractor_jobs row exists linking this contractor to this
+// project. Used whenever a contractor is assigned outside the normal
+// Proposals-board webhook flow (e.g. manually via the Edit Project modal,
+// on project creation, or via the sync endpoint) so the assignment actually
+// surfaces in the contractor's portal. Safe to call repeatedly — does
+// nothing if a row for this exact project+contractor pair already exists.
+async function ensureContractorJob(projectId, contractorId) {
+  try {
+    const { data: existingJob } = await supabase
+      .from('contractor_jobs')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('contractor_id', contractorId)
+      .maybeSingle();
+
+    if (existingJob) return existingJob;
+
+    const { data: newJob, error } = await supabase
+      .from('contractor_jobs')
+      .insert({ project_id: projectId, contractor_id: contractorId, status: 'pending' })
+      .select().single();
+
+    if (error) throw error;
+    return newJob;
+  } catch (err) {
+    console.error('ensureContractorJob error:', err.message);
+    return null;
+  }
+}
 
 function buildRevisionSummary(stage, revisions) {
   const freeAllowed = stage === 'preliminary' ? 2 : 1;
