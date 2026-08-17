@@ -89,14 +89,16 @@ router.get('/jobs', auth, async (req, res) => {
   }
 });
 
-// Get proposal details for a job
+// Get proposal details for a job. Client contact details (name, email, phone)
+// are only included once the contractor has accepted the job — they stay
+// withheld while the job is pending or declined.
 router.get('/jobs/:jobId/details', auth, async (req, res) => {
   try {
     if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
 
     const { data: job } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id)`)
       .eq('id', req.params.jobId)
       .eq('contractor_id', req.user.id)
       .single();
@@ -108,7 +110,17 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
       proposalDetails = await getProposalDetails(job.project.monday_item_id);
     }
 
-    res.json({ job, proposalDetails });
+    let client = null;
+    if (job.status === 'accepted' && job.project?.client_id) {
+      const { data: clientUser } = await supabase
+        .from('users')
+        .select('name, email, phone')
+        .eq('id', job.project.client_id)
+        .single();
+      client = clientUser || null;
+    }
+
+    res.json({ job, proposalDetails, client });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
