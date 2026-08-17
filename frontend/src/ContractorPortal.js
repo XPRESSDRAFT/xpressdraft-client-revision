@@ -16,6 +16,7 @@ function XPDLogo({size=40,variant="color"}){
 
 function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob}){
   const pd = jobDetails?.proposalDetails;
+  const client = jobDetails?.client; // only populated by the backend once job.status === 'accepted'
   return (
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:12}}>
@@ -33,6 +34,27 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
           <div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>
         ) : (
           <>
+            {job.status==="accepted"&&client&&(
+              <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
+                <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 12px"}}>Client Details</h3>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+B.cream}}>
+                  <span style={{fontSize:13,color:B.black2}}>Name</span>
+                  <span style={{fontSize:13,fontWeight:500,color:B.black}}>{client.name}</span>
+                </div>
+                {client.email&&(
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+B.cream}}>
+                    <span style={{fontSize:13,color:B.black2}}>Email</span>
+                    <span style={{fontSize:13,fontWeight:500,color:B.black}}>{client.email}</span>
+                  </div>
+                )}
+                {client.phone&&(
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0"}}>
+                    <span style={{fontSize:13,color:B.black2}}>Phone</span>
+                    <span style={{fontSize:13,fontWeight:500,color:B.black}}>{client.phone}</span>
+                  </div>
+                )}
+              </div>
+            )}
             {pd?.briefing&&(
               <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
                 <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 8px"}}>Client Briefing</h3>
@@ -128,8 +150,12 @@ function ContractorPortal({user,onLogout}){
   const acceptJob=async()=>{
     if(!window.confirm("Accept this job at "+totalFee+"% fee?"))return;
     await fetch(API+"/api/contractor/jobs/"+selectedJob.id+"/accept",{method:"POST",headers:{Authorization:"Bearer "+token()}});
+    // Re-fetch details so the newly-unlocked client info shows immediately
+    // instead of waiting for the contractor to re-open the job.
+    const refreshed=await fetch(API+"/api/contractor/jobs/"+selectedJob.id+"/details",{headers:{Authorization:"Bearer "+token()}}).then(r=>r.json());
+    setJobDetails(refreshed);
     setJobs(jobs.map(j=>j.id===selectedJob.id?{...j,status:"accepted"}:j));
-    setSelectedJob(null);
+    setSelectedJob(prev=>prev?{...prev,status:"accepted"}:prev);
     alert("Job accepted. You will be notified when drawings are assigned.");
   };
 
