@@ -113,6 +113,7 @@ function ProjectsPage({user,onLogout}){
   const [editAssignedTo,setEditAssignedTo]=useState("");
   const [projectStatuses,setProjectStatuses]=useState({});
   const [lockToggling,setLockToggling]=useState({});
+  const [syncingJobs,setSyncingJobs]=useState(false);
   const fileRefs=useRef({});
   useEffect(()=>{
     const loadProjects=()=>{api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});};
@@ -180,6 +181,25 @@ function ProjectsPage({user,onLogout}){
       alert("Failed to update lock status: "+e.message);
     }
     setLockToggling(prev=>({...prev,[p.id]:false}));
+  };
+  // Backfills contractor_jobs rows for any project that has a contractor_id
+  // set but no matching job row yet (e.g. assignments made before that
+  // auto-create logic existed). Safe to run repeatedly.
+  const syncContractorJobs=async()=>{
+    if(!window.confirm("Scan all projects and create any missing contractor job records?"))return;
+    setSyncingJobs(true);
+    try{
+      const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/projects/sync-contractor-jobs",{
+        method:"POST",
+        headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
+      });
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||"Sync failed");
+      alert("Scanned "+d.scanned+" assigned project(s). Created "+d.created+" missing job record(s). "+d.alreadyLinked+" were already linked.");
+    }catch(e){
+      alert("Failed to sync contractor jobs: "+e.message);
+    }
+    setSyncingJobs(false);
   };
   const openEdit=(p)=>{
     setEditingProject(p);
@@ -251,6 +271,7 @@ function ProjectsPage({user,onLogout}){
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
           {user.role==="admin"&&<button onClick={()=>setShowHealth(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>System</button>}
+          {user.role==="admin"&&<button onClick={syncContractorJobs} disabled={syncingJobs} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:syncingJobs?"default":"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",opacity:syncingJobs?0.6:1}}>{syncingJobs?"Syncing...":"Sync Contractor Jobs"}</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:user.role==="contractor"?"#378ADD":"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
           <button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>
