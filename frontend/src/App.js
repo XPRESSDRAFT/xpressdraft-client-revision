@@ -153,52 +153,30 @@ function ProjectsPage({user,onLogout}){
     await api.updateProject(p.id,{siteAddress:newVal.trim()});
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
-  // Toggles a project between LOCKED and UNLOCKED, then re-fetches the project
-  // from the backend to confirm the change actually persisted before telling
-  // the admin it succeeded.
-  const toggleLock=async(p)=>{
+  const toggleLock=async(p)=>{ // toggles LOCKED/UNLOCKED, re-fetches to confirm it persisted
     const willLock=!p.locked;
-    const confirmMsg=willLock
-      ?"Lock "+(p.job_number||p.name)+"? The client will immediately lose access to their plans."
-      :"Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment.";
+    const confirmMsg=willLock?"Lock "+(p.job_number||p.name)+"? The client will immediately lose access to their plans.":"Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment.";
     if(!window.confirm(confirmMsg))return;
     setLockToggling(prev=>({...prev,[p.id]:true}));
     try{
-      const updates=willLock?{locked:true}:{locked:false,stripePaymentLink:null};
-      await api.updateProject(p.id,updates);
-      // Re-fetch fresh data rather than trusting the PUT response, so a
-      // silent no-op on the backend doesn't get reported as a success.
+      await api.updateProject(p.id,willLock?{locked:true}:{locked:false,stripePaymentLink:null});
       const d=await api.getProject(p.id);
       const actualLocked=!!d.project.locked;
-      if(actualLocked!==willLock){
-        alert("Update didn't take effect — "+(p.job_number||p.name)+" is still "+(actualLocked?"LOCKED":"UNLOCKED")+". Check the backend PUT /projects route.");
-        setProjects(prev=>prev.map(x=>x.id===p.id?{...x,locked:actualLocked,stripe_payment_link:d.project.stripe_payment_link}:x));
-      }else{
-        setProjects(prev=>prev.map(x=>x.id===p.id?{...x,locked:actualLocked,stripe_payment_link:d.project.stripe_payment_link}:x));
-        alert((p.job_number||p.name)+" is now "+(actualLocked?"LOCKED. The client no longer has access.":"UNLOCKED. The client can now access their plans."));
-      }
-    }catch(e){
-      alert("Failed to update lock status: "+e.message);
-    }
+      setProjects(prev=>prev.map(x=>x.id===p.id?{...x,locked:actualLocked,stripe_payment_link:d.project.stripe_payment_link}:x));
+      if(actualLocked!==willLock)alert("Update didn't take effect — "+(p.job_number||p.name)+" is still "+(actualLocked?"LOCKED":"UNLOCKED")+". Check the backend PUT /projects route.");
+      else alert((p.job_number||p.name)+" is now "+(actualLocked?"LOCKED. The client no longer has access.":"UNLOCKED. The client can now access their plans."));
+    }catch(e){alert("Failed to update lock status: "+e.message);}
     setLockToggling(prev=>({...prev,[p.id]:false}));
   };
-  // Backfills contractor_jobs rows for any project that has a contractor_id
-  // set but no matching job row yet (e.g. assignments made before that
-  // auto-create logic existed). Safe to run repeatedly.
-  const syncContractorJobs=async()=>{
+  const syncContractorJobs=async()=>{ // backfills missing contractor_jobs rows
     if(!window.confirm("Scan all projects and create any missing contractor job records?"))return;
     setSyncingJobs(true);
     try{
-      const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/projects/sync-contractor-jobs",{
-        method:"POST",
-        headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
-      });
+      const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/projects/sync-contractor-jobs",{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}});
       const d=await r.json();
       if(!r.ok)throw new Error(d.error||"Sync failed");
       alert("Scanned "+d.scanned+" assigned project(s). Created "+d.created+" missing job record(s). "+d.alreadyLinked+" were already linked.");
-    }catch(e){
-      alert("Failed to sync contractor jobs: "+e.message);
-    }
+    }catch(e){alert("Failed to sync contractor jobs: "+e.message);}
     setSyncingJobs(false);
   };
   const openEdit=(p)=>{
