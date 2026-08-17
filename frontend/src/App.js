@@ -4,13 +4,11 @@ import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from "reac
 import * as api from "./api";
 import DrawingView from "./DrawingView";
 import ContractorPortal from "./ContractorPortal";
-
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
   tone1:"#D2CAC4",tone2:"#A9A09B",black1:"#42453C",
   black2:"#5E635B",white:"#ffffff",
 };
-
 export default function App() {
   const [user,setUser]=useState(null);
   const [loading,setLoading]=useState(true);
@@ -29,7 +27,6 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
 function LoginPage({onLogin}){
   const [email,setEmail]=useState("");
   const [sent,setSent]=useState(false);
@@ -68,7 +65,6 @@ function LoginPage({onLogin}){
     </div>
   );
 }
-
 function VerifyPage({onLogin}){
   const [searchParams]=useSearchParams();
   const navigate=useNavigate();
@@ -89,7 +85,6 @@ function VerifyPage({onLogin}){
     </div>
   );
 }
-
 function ProjectsPage({user,onLogout}){
   const [projects,setProjects]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -118,19 +113,19 @@ function ProjectsPage({user,onLogout}){
   const [editAssignedTo,setEditAssignedTo]=useState("");
   const [projectStatuses,setProjectStatuses]=useState({});
   const fileRefs=useRef({});
-
   useEffect(()=>{
-    api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});
+    const loadProjects=()=>{api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});};
+    loadProjects();
+    let interval;if(user.role==="client"){interval=setInterval(loadProjects,30000);}
+    return()=>clearInterval(interval);
     if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
   },[]);
-
   const createProject=async()=>{
     if(!newName.trim())return;
     const d=await api.createProject({name:newName,description:newDesc,stage:newStage,clientId:newClientId||null,jobNumber:newJobNum,siteAddress:newAddress,contractorId:newContractorId||null,assignedTo:newAssignedTo||null});
     setProjects([d.project,...projects]);
     setShowNew(false);setNewName("");setNewDesc("");setNewJobNum("");setNewAddress("");
   };
-
   const handleUpload=async(projectId,files)=>{
     for(const file of files){
       if(!file.type.includes("pdf"))continue;
@@ -138,20 +133,17 @@ function ProjectsPage({user,onLogout}){
     }
     const d=await api.getProjects();setProjects(d.projects);
   };
-
   const deleteProject=async(id)=>{
     if(!window.confirm("Delete this project?"))return;
     await api.deleteProject(id);
     setProjects(projects.filter(p=>p.id!==id));
   };
-
   const deleteDrawing=async(projectId,drawingId,e)=>{
     e.stopPropagation();
     if(!window.confirm("Delete this drawing?"))return;
     await api.deleteDrawing(projectId,drawingId);
     const d=await api.getProjects();setProjects(d.projects);
   };
-
   const editProjectName=async(p)=>{
     const current=p.site_address||p.name;
     const newVal=prompt("Edit project name / site address:",current);
@@ -159,14 +151,12 @@ function ProjectsPage({user,onLogout}){
     await api.updateProject(p.id,{siteAddress:newVal.trim()});
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
-
 const unlockProject=async(p)=>{
     if(!window.confirm("Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment."))return;
     await api.updateProject(p.id,{locked:false,stripePaymentLink:null});
     const d=await api.getProjects();setProjects(d.projects);
     alert((p.job_number||p.name)+" has been unlocked. The client can now access their plans.");
   };
-
   const openEdit=(p)=>{
     setEditingProject(p);
     setEditName(p.site_address||p.name||"");
@@ -177,7 +167,6 @@ const unlockProject=async(p)=>{
     setEditContractorId(p.contractor_id||"");
     setEditAssignedTo(p.assigned_to||"");
   };
-
   const saveEdit=async()=>{
     if(!editingProject)return;
     await api.updateProject(editingProject.id,{
@@ -188,13 +177,10 @@ const unlockProject=async(p)=>{
     const d=await api.getProjects();setProjects(d.projects);
     setEditingProject(null);
   };
-
   if(showHealth)return<SystemHealthPage onBack={()=>setShowHealth(false)}/>;
   if(showAdmin)return<AdminPage user={user} onBack={()=>setShowAdmin(false)}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
-
   const isTeam=user.role==="team"||user.role==="admin";
-
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       {editingProject&&(
@@ -301,13 +287,8 @@ const unlockProject=async(p)=>{
                       {ps?.timeline&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{ps.timeline}</span>}
                     </div>
                   </div>
-                  <div style={{marginBottom:16}}>
-                    <div style={{display:"flex",alignItems:"center"}}>
-                      {timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:10,height:10,borderRadius:"50%",background:i<step?"#639922":i===step?B.orange:B.tone1,border:i===step?"2px solid "+B.orange:"none"}}/><div style={{fontSize:7,color:i<=step?B.black:B.black2,marginTop:3,textAlign:"center",maxWidth:40,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step?"#639922":B.tone1,marginBottom:14,minWidth:6}}/>}</div>))}
-                    </div>
-                  </div>
-                  {ps?.designerName&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:B.cream,borderRadius:8,marginBottom:12,border:"1px solid "+B.tone1}}><div style={{width:36,height:36,borderRadius:"50%",background:B.orange,display:"flex",alignItems:"center",justifyContent:"center",color:B.white,fontWeight:700,fontSize:14,flexShrink:0}}>{ps.designerName.charAt(0)}</div><div><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.05em"}}>ASSIGNED DESIGNER</div><div style={{fontSize:13,fontWeight:600,color:B.black}}>Xpress Draft</div>{ps.designerPhone&&<div style={{fontSize:12,color:B.black2}}>{ps.designerPhone}</div>}</div></div>}
-                  <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                  <div style={{marginBottom:16}}><div style={{display:"flex",alignItems:"center"}}>{timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:10,height:10,borderRadius:"50%",background:i<step?"#639922":i===step?B.orange:B.tone1,border:i===step?"2px solid "+B.orange:"none"}}/><div style={{fontSize:7,color:i<=step?B.black:B.black2,marginTop:3,textAlign:"center",maxWidth:40,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step?"#639922":B.tone1,marginBottom:14,minWidth:6}}/>}</div>))}</div></div>
+                  {ps?.designerName&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:B.cream,borderRadius:8,marginBottom:12,border:"1px solid "+B.tone1}}><div style={{width:36,height:36,borderRadius:"50%",background:B.orange,display:"flex",alignItems:"center",justifyContent:"center",color:B.white,fontWeight:700,fontSize:14,flexShrink:0}}>{ps.designerName.charAt(0)}</div><div><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.05em"}}>ASSIGNED DESIGNER</div><div style={{fontSize:13,fontWeight:600,color:B.black}}>Xpress Draft</div>{ps.designerPhone&&<div style={{fontSize:12,color:B.black2}}>{ps.designerPhone}</div>}</div></div>}<div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                     {p.locked&&p.stripe_payment_link
                       ?<a href={p.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none",fontSize:13}}>Pay to access plans →</a>
                       :(p.drawings?.length||0)>0&&<button onClick={()=>setActiveProject({...p,skipDashboard:true})} style={{...btnPrimary,fontSize:13}}>Review my drawings →</button>
@@ -355,7 +336,6 @@ const unlockProject=async(p)=>{
     </div>
   );
 }
-
 function AdminPage({user,onBack}){
   const [users,setUsers]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -370,9 +350,7 @@ function AdminPage({user,onBack}){
   const [editUserEmail,setEditUserEmail]=useState("");
   const [editUserRole,setEditUserRole]=useState("");
   const [editUserPhone,setEditUserPhone]=useState("");
-
   useEffect(()=>{api.getUsers().then(d=>{setUsers(d.users);setLoading(false);});},[]);
-
   const addUser=async()=>{
     if(!newName.trim()||!newEmail.trim())return;
     try{
@@ -382,7 +360,6 @@ function AdminPage({user,onBack}){
       setShowAdd(false);setNewName("");setNewEmail("");
     }catch(e){setMsg("Error: "+e.message);}
   };
-
   const removeUser=async(id,name)=>{
     if(!window.confirm("Remove "+name+"?"))return;
     try{
@@ -390,12 +367,10 @@ function AdminPage({user,onBack}){
       setUsers(users.filter(u=>u.id!==id));setMsg(name+" removed.");
     }catch(e){setMsg("Failed to remove user");}
   };
-
   const resendInvite=async(id,name)=>{
     try{await api.resendInvite(id);setMsg("Invite resent to "+name+".");}
     catch(e){setMsg("Failed to resend invite");}
   };
-
   const openEditUser=(u)=>{
     setEditingUser(u);
     setEditUserName(u.name||"");
@@ -403,7 +378,6 @@ function AdminPage({user,onBack}){
     setEditUserRole(u.role||"client");
     setEditUserPhone(u.phone||"");
   };
-
   const saveEditUser=async()=>{
     if(!editingUser)return;
     try{
@@ -417,7 +391,6 @@ function AdminPage({user,onBack}){
       setMsg("User updated successfully.");
     }catch(e){setMsg("Failed to update user");}
   };
-
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       {editingUser&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:28,width:440,fontFamily:"Manrope,sans-serif"}}><h3 style={{margin:"0 0 16px",color:B.black,fontSize:16}}>Edit User</h3><input style={{...inputSt,marginBottom:8}} placeholder="Full name" value={editUserName} onChange={e=>setEditUserName(e.target.value)}/><input style={{...inputSt,marginBottom:8}} placeholder="Email address" value={editUserEmail} onChange={e=>setEditUserEmail(e.target.value)}/><input style={{...inputSt,marginBottom:8}} placeholder="Phone number" value={editUserPhone} onChange={e=>setEditUserPhone(e.target.value)}/><div style={{display:"flex",gap:8,marginBottom:16}}>{[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(<div key={v} onClick={()=>setEditUserRole(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(editUserRole===v?B.orange:B.tone1),background:editUserRole===v?"#FEF3E8":B.white,color:editUserRole===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:editUserRole===v?600:400}}>{l}</div>))}</div><div style={{display:"flex",gap:8}}><button onClick={()=>setEditingUser(null)} style={btnGhost}>Cancel</button><button onClick={saveEditUser} style={btnPrimary}>Save changes</button></div></div></div>)}
@@ -474,7 +447,6 @@ function AdminPage({user,onBack}){
     </div>
   );
 }
-
 function SystemHealthPage({onBack}){
   const [health,setHealth]=useState(null);
   const [loading,setLoading]=useState(true);
@@ -491,7 +463,6 @@ function SystemHealthPage({onBack}){
   const mondayItems=[{label:"Board ID",value:"18388615760"},{label:"Webhook",value:"Active — DELIVERY STATUS"},{label:"Recommendation",value:"Verify API access is included in your Monday plan"}];
   return(<div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}><nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:10}}><XPDLogo size={40} variant="white"/><span style={{color:B.black2,marginLeft:8,fontSize:13}}>System Health</span><button onClick={onBack} style={{marginLeft:"auto",background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Back</button></nav><div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}><div style={{marginBottom:24}}><h1 style={{fontSize:22,fontWeight:600,color:B.black,margin:"0 0 4px"}}>System Health</h1><p style={{fontSize:13,color:B.black2,margin:0}}>Monitor service limits and plan usage across all suppliers.</p></div>{loading?<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>:<><Card title="Supabase — Database & Storage" status={health?.supabase?.warn?"warn":"ok"} items={supabaseItems} link="https://supabase.com/dashboard/project/xitgnfstcfbaoxqbwxug" linkLabel="Open Supabase"/><Card title="Resend — Email" status={health?.resend?.warn?"warn":"ok"} items={resendItems} link="https://resend.com/overview" linkLabel="Open Resend"/><Card title="Render — Hosting" status="warn" items={renderItems} link="https://dashboard.render.com" linkLabel="Open Render"/><Card title="Anthropic — AI" status="ok" items={anthropicItems} link="https://console.anthropic.com" linkLabel="Open Anthropic"/><Card title="Monday.com — Job Management" status="ok" items={mondayItems} link="https://xpressdraft.monday.com" linkLabel="Open Monday"/></>}</div></div>);
 }
-
 function ProjectDetail({project,user,onBack}){
   const [drawings,setDrawings]=useState([]);
   const [activeDrawing,setActiveDrawing]=useState(null);
@@ -500,7 +471,6 @@ function ProjectDetail({project,user,onBack}){
   const [projectStatus,setProjectStatus]=useState(null);
   const [statusLoading,setStatusLoading]=useState(true);
   const [showDashboard,setShowDashboard]=useState(!project.skipDashboard);
-
   useEffect(()=>{
     api.getDrawings(project.id).then(d=>{
       setDrawings(d.drawings);
@@ -511,16 +481,13 @@ function ProjectDetail({project,user,onBack}){
       headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}
     }).then(r=>r.json()).then(d=>{setProjectStatus(d);setStatusLoading(false);}).catch(()=>setStatusLoading(false));
   },[]);
-
   const grantBonus=async()=>{
     await api.grantBonusRevision(project.id);
     const d=await api.getProject(project.id);
     setRevisionSummary(d.project.revisionSummary);
   };
-
   const rs=revisionSummary;
   const isTeam=user.role==="team"||user.role==="admin";
-
   if(user.role==="client"&&showDashboard){
     const timelineSteps=["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"];
     const currentStep=projectStatus?.timeline?timelineSteps.indexOf(projectStatus.timeline):0;
@@ -549,7 +516,6 @@ function ProjectDetail({project,user,onBack}){
       </div>
     );
   }
-
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 20px",display:"flex",alignItems:"center",height:52,gap:12}}>
@@ -599,13 +565,11 @@ function ProjectDetail({project,user,onBack}){
     </div>
   );
 }
-
 function XPDLogo({size=40,variant="color"}){
   const white="https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_White.png";
   const color="https://xitgnfstcfbaoxqbwxug.supabase.co/storage/v1/object/public/public-assets/XPD%20Logo_RGB_Lockup_Combo.png";
   return <img src={variant==="white"?white:color} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
-
 const inputSt={width:"100%",border:"1px solid "+B.tone1,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box",display:"block"};
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
 const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:"1px solid "+B.tone1,borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",display:"inline-flex",alignItems:"center",gap:5};
