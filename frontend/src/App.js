@@ -112,6 +112,7 @@ function ProjectsPage({user,onLogout}){
   const [editContractorId,setEditContractorId]=useState("");
   const [editAssignedTo,setEditAssignedTo]=useState("");
   const [projectStatuses,setProjectStatuses]=useState({});
+  const [lockToggling,setLockToggling]=useState({});
   const fileRefs=useRef({});
   useEffect(()=>{
     const loadProjects=()=>{api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});};
@@ -151,11 +152,34 @@ function ProjectsPage({user,onLogout}){
     await api.updateProject(p.id,{siteAddress:newVal.trim()});
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
-const unlockProject=async(p)=>{
-    if(!window.confirm("Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment."))return;
-    await api.updateProject(p.id,{locked:false,stripePaymentLink:null});
-    const d=await api.getProjects();setProjects(d.projects);
-    alert((p.job_number||p.name)+" has been unlocked. The client can now access their plans.");
+  // Toggles a project between LOCKED and UNLOCKED, then re-fetches the project
+  // from the backend to confirm the change actually persisted before telling
+  // the admin it succeeded.
+  const toggleLock=async(p)=>{
+    const willLock=!p.locked;
+    const confirmMsg=willLock
+      ?"Lock "+(p.job_number||p.name)+"? The client will immediately lose access to their plans."
+      :"Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment.";
+    if(!window.confirm(confirmMsg))return;
+    setLockToggling(prev=>({...prev,[p.id]:true}));
+    try{
+      const updates=willLock?{locked:true}:{locked:false,stripePaymentLink:null};
+      await api.updateProject(p.id,updates);
+      // Re-fetch fresh data rather than trusting the PUT response, so a
+      // silent no-op on the backend doesn't get reported as a success.
+      const d=await api.getProject(p.id);
+      const actualLocked=!!d.project.locked;
+      if(actualLocked!==willLock){
+        alert("Update didn't take effect — "+(p.job_number||p.name)+" is still "+(actualLocked?"LOCKED":"UNLOCKED")+". Check the backend PUT /projects route.");
+        setProjects(prev=>prev.map(x=>x.id===p.id?{...x,locked:actualLocked,stripe_payment_link:d.project.stripe_payment_link}:x));
+      }else{
+        setProjects(prev=>prev.map(x=>x.id===p.id?{...x,locked:actualLocked,stripe_payment_link:d.project.stripe_payment_link}:x));
+        alert((p.job_number||p.name)+" is now "+(actualLocked?"LOCKED. The client no longer has access.":"UNLOCKED. The client can now access their plans."));
+      }
+    }catch(e){
+      alert("Failed to update lock status: "+e.message);
+    }
+    setLockToggling(prev=>({...prev,[p.id]:false}));
   };
   const openEdit=(p)=>{
     setEditingProject(p);
@@ -322,7 +346,7 @@ const unlockProject=async(p)=>{
                       </div>
                     </div>
                     <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                      {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{p.locked&&user.role==="admin"&&<button onClick={()=>unlockProject(p)} style={{...btnGhost,color:"#639922",borderColor:"#639922"}}>Unlock</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
+                      {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} style={btnGhost}>Upload PDF</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{user.role==="admin"&&<button onClick={()=>toggleLock(p)} disabled={!!lockToggling[p.id]} style={{...btnGhost,color:p.locked?"#8B2020":"#639922",borderColor:p.locked?"#8B2020":"#639922",opacity:lockToggling[p.id]?0.6:1,cursor:lockToggling[p.id]?"default":"pointer",fontWeight:600,minWidth:78,justifyContent:"center"}}>{lockToggling[p.id]?"…":p.locked?"LOCKED":"UNLOCKED"}</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
                       {(p.drawings?.length||0)>0&&(p.locked&&user.role==='client'?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>{p.stripe_payment_link?"Pay to access plans":"Payment pending"}</a>:<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>)}
                     </div>
                   </div>
