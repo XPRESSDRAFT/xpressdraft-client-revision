@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ContractorUpload from "./ContractorUpload";
 
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
@@ -14,7 +15,7 @@ function XPDLogo({size=40,variant="color"}){
   return <img src={variant==="white"?white:color} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
 
-function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob}){
+function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob,apiBase,token}){
   const pd = jobDetails?.proposalDetails;
   const client = jobDetails?.client; // only populated by the backend once job.status === 'accepted'
   return (
@@ -104,6 +105,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
                 <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee</p>
               </div>
             )}
+            {job.status==="accepted"&&<ContractorUpload jobId={job.id} apiBase={apiBase} token={token} stage={job.project?.stage}/>}
           </>
         )}
       </div>
@@ -180,6 +182,8 @@ function ContractorPortal({user,onLogout}){
         updateFee={updateFee}
         acceptJob={acceptJob}
         declineJob={declineJob}
+        apiBase={API}
+        token={token()}
       />
     );
   }
