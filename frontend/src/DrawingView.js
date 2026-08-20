@@ -302,23 +302,26 @@ const generateMarkupPdf=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
     const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
-    if(rs && rs.used>=rs.totalAllowed){
-      alert("You have used all "+total+" included revision"+(total!==1?"s":"")+" for the "+( rs.stageLabel==="PR"?"Preliminary":"Working Drawings")+" stage.\n\nThis revision will incur a variation fee. A member of the Xpress Draft team will contact you to advise the cost before proceeding.\n\nPlease contact us at info@xpressdraft.com.au if you have any questions.");
-      return;
-    }
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
-    const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nProceed?");
-    if(!confirmed)return;
+    let isVariation=false;
+    if(rs && rs.used>=rs.totalAllowed){
+      const proceed=window.confirm("You have used all "+total+" included revision"+(total!==1?"s":"")+" for the "+stage+" stage.\n\nThis revision will incur a variation fee. A member of the Xpress Draft team will contact you to advise the cost before proceeding.\n\nDo you want to proceed with submitting these changes now?");
+      if(!proceed)return;
+      isVariation=true;
+    } else {
+      const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nProceed?");
+      if(!confirmed)return;
+    }
     let lastSummary=rs;
     for(const c of openComments){
       try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
     }
     if(lastSummary)onRevisionConfirmed(lastSummary);
-    alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
+    alert("All changes submitted. The Xpress Draft team will review and respond shortly."+(isVariation?" A variation fee applies to this revision — our team will be in touch with the cost.":""));
     // PDF generation + Monday upload continues in the background from here.
     try{
       const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
-      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
+      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));fd.append("isVariation",isVariation?"true":"false");
       const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
       if(!submitRes.ok){
         const errData=await submitRes.json().catch(()=>({}));
