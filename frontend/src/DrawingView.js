@@ -245,17 +245,30 @@ const generateMarkupPdf=async()=>{
     if(!window.jspdf){const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";document.head.appendChild(s);await new Promise(r=>{s.onload=r;});}
     const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:"landscape",unit:"pt"});let fp=true;
     const allPins=comments.filter(c=>c.pin_x!=null).sort((a,b)=>(a.page||1)-(b.page||1));
+    // Summary goes right after the last page that actually has a pin or
+    // markup on it, not after the whole drawing set — e.g. if all markup
+    // is on page 1 of a 5-page set, the summary becomes page 2, not page 6.
+    const annotatedPages=new Set();
+    allPins.forEach(cc=>annotatedPages.add(cc.page||1));
+    Object.keys(allMarkupsRef.current).forEach(k=>{if((allMarkupsRef.current[k]||[]).length>0)annotatedPages.add(Number(k));});
+    const lastAnnotatedPage=annotatedPages.size>0?Math.max(...annotatedPages):totalPages;
+    const writeSummaryPage=()=>{
+      const pw=pdf.internal.pageSize.getWidth();
+      pdf.setFontSize(16);pdf.setTextColor(42,43,41);pdf.text("Markup Summary",40,40);
+      pdf.setFontSize(11);pdf.setTextColor(94,99,91);pdf.text([project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name,40,58);
+      let sy=76;
+      allPins.forEach((cc,i)=>{if(sy>480){pdf.addPage();sy=40;}pdf.setFontSize(11);pdf.setTextColor(226,75,74);pdf.text("Pin "+(i+1)+" (Page "+(cc.page||1)+")",40,sy);pdf.setTextColor(42,43,41);pdf.setFontSize(10);const ls=pdf.splitTextToSize(cc.text,pw-80);pdf.text(ls,40,sy+13);sy+=13+(ls.length*12)+10;});
+    };
     for(let p=1;p<=totalPages;p++){
       const pg=await pdfDoc.getPage(p);const vp=pg.getViewport({scale:2});
       const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;const ctx=c.getContext("2d");
       await pg.render({canvasContext:ctx,viewport:vp}).promise;
-      (allMarkupsRef.current[p]||[]).forEach(path=>{ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*vp.width;ctx.lineCap="round";ctx.lineJoin="round";if(path.tool==="hl")ctx.globalAlpha=0.35;if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);}else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);}else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));ctx.stroke();}ctx.restore();});
+      (allMarkupsRef.current[p]||[]).forEach(path=>{ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*vp.width;ctx.lineCap="round";ctx.lineJoin="round";if(path.tool==="hl")ctx.globalAlpha=0.35;if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);}else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);}else if(path.tool==="arrow"){drawArrow(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else if(path.tool==="cloud"){drawCloud(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));ctx.stroke();}ctx.restore();});
       allPins.filter(cc=>(cc.page||1)===p).forEach(cc=>{const gi=allPins.indexOf(cc);const x=cc.pin_x*vp.width,y=cc.pin_y*vp.height;ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 18px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(gi+1,x,y);});
       const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();const ratio=Math.min(pw/vp.width,ph/vp.height);
       if(!fp)pdf.addPage();pdf.addImage(c.toDataURL("image/jpeg",0.9),"JPEG",0,0,vp.width*ratio,vp.height*ratio);fp=false;
+      if(p===lastAnnotatedPage){pdf.addPage();writeSummaryPage();}
     }
-    pdf.addPage();const pw=pdf.internal.pageSize.getWidth();pdf.setFontSize(16);pdf.setTextColor(42,43,41);pdf.text("Markup Summary",40,40);pdf.setFontSize(11);pdf.setTextColor(94,99,91);pdf.text([project.job_number,project.site_address].filter(Boolean).join(" - ")||project.name,40,58);
-    let sy=76;allPins.forEach((cc,i)=>{if(sy>480){pdf.addPage();sy=40;}pdf.setFontSize(11);pdf.setTextColor(226,75,74);pdf.text("Pin "+(i+1)+" (Page "+(cc.page||1)+")",40,sy);pdf.setTextColor(42,43,41);pdf.setFontSize(10);const ls=pdf.splitTextToSize(cc.text,pw-80);pdf.text(ls,40,sy+13);sy+=13+(ls.length*12)+10;});
     return {pdf,allPins};
   };
 
@@ -275,8 +288,13 @@ const generateMarkupPdf=async()=>{
     setExporting(false);
   };
 
+  // Submits all open comments, confirms the revision immediately (fast —
+  // just database writes), then generates the annotated PDF and uploads it
+  // to Monday in the background. The client sees confirmation right away
+  // instead of waiting on PDF rendering + upload. If the background upload
+  // fails, the client is alerted directly rather than the failure being
+  // silently swallowed — the backend also emails admin in that case.
   const submitAllChanges=async()=>{
-    // Check if project is locked (under review)
     if(project.locked){
       alert("Your changes are currently being reviewed by the Xpress Draft team. You will be notified when your updated drawings are ready.");
       return;
@@ -284,33 +302,32 @@ const generateMarkupPdf=async()=>{
     const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
     const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
-    // Check over-allowance
     if(rs && rs.used>=rs.totalAllowed){
       alert("You have used all "+total+" included revision"+(total!==1?"s":"")+" for the "+( rs.stageLabel==="PR"?"Preliminary":"Working Drawings")+" stage.\n\nThis revision will incur a variation fee. A member of the Xpress Draft team will contact you to advise the cost before proceeding.\n\nPlease contact us at info@xpressdraft.com.au if you have any questions.");
       return;
     }
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
-    const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nYou have "+openComments.length+" comment"+(openComments.length!==1?"s":"")+" to submit.\n\nProceed?");
+    const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nProceed?");
     if(!confirmed)return;
     let lastSummary=rs;
     for(const c of openComments){
       try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
     }
     if(lastSummary)onRevisionConfirmed(lastSummary);
-    // Generate PDF and upload to Monday
-try{
-      console.log("Starting PDF generation for submit...");
-      const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
-     console.log("PDF generated, pins:", submitPins.length, "uploading to Monday...");
-      console.log("API URL:", process.env.REACT_APP_API_URL||"(empty)");
-      console.log("Token:", !!localStorage.getItem("xpd_token"));
-      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
-const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
-      console.log("Submit response status:", submitRes.status);
-      const submitData=await submitRes.json();
-      console.log("Submit response data:", submitData);
-}catch(e){console.error("PDF upload error:",e.message,e.stack);}
     alert("All changes submitted. The Xpress Draft team will review and respond shortly.");
+    // PDF generation + Monday upload continues in the background from here.
+    try{
+      const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
+      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
+      const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
+      if(!submitRes.ok){
+        const errData=await submitRes.json().catch(()=>({}));
+        throw new Error(errData.error||"Upload failed");
+      }
+    }catch(e){
+      console.error("PDF upload error:",e.message,e.stack);
+      alert("Your comments were saved, but sending the marked-up drawing to Xpress Draft failed. Please contact info@xpressdraft.com.au so we can check this manually — your revision is still recorded.");
+    }
   };
 
   const COLORS=["#EA672F","#E24B4A","#378ADD","#639922","#7F77DD","#2A2B29","#CC0000","#006600","#006600"];
