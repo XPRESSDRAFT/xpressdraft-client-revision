@@ -46,7 +46,7 @@ function LoginPage({onLogin}){
         <div style={{fontSize:13,color:B.black2,marginBottom:28,textAlign:"center"}}>Plan Review Portal</div>
         {sent?(
           <div style={{padding:16,background:"#EAF3DE",borderRadius:8,color:"#2E5C10",fontSize:14,lineHeight:1.6}}>
-            Check your email for a login link. It expires in 48 hours.
+            Check your email for a login link. It's valid for 6 months.
           </div>
         ):(
           <>
@@ -573,17 +573,16 @@ function ProjectDetail({project,user,onBack}){
             </div>
           ))}
         </div>
-        {activeDrawing && project.locked && user.role === 'client'
-          ?<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:B.cream,gap:16,padding:40}}>
-            <div style={{fontSize:32}}>🔒</div>
-            <h2 style={{color:B.black,margin:0,fontSize:20}}>Payment required</h2>
-            <p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:400,lineHeight:1.6}}>Your drawings are ready but require payment before access. Please check your email for the payment link.</p>
+        {(()=>{
+          const lockState=activeDrawing&&project.locked&&user.role==='client'?(project.stripe_payment_link?"payment":"review"):null;
+          if(lockState)return<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:B.cream,gap:16,padding:40}}>
+            <div style={{fontSize:32}}>{lockState==="payment"?"🔒":"⏳"}</div><h2 style={{color:B.black,margin:0,fontSize:20}}>{lockState==="payment"?"Payment required":"Under review"}</h2>
+            <p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:400,lineHeight:1.6}}>{lockState==="payment"?"Your drawings are ready but require payment before access. Please check your email for the payment link.":"Your changes are currently being reviewed by the Xpress Draft team. You'll be notified as soon as your updated drawings are ready."}</p>
             <a href="mailto:info@xpressdraft.com.au" style={{color:B.orange,fontSize:13}}>Contact us at info@xpressdraft.com.au</a>
-          </div>
-          :activeDrawing
-            ?<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)}/>
-            :<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:B.black2}}>{loading?"Loading...":"No drawings"}</div>
-        }
+          </div>;
+          if(activeDrawing)return<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)}/>;
+          return<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:B.black2}}>{loading?"Loading...":"No drawings"}</div>;
+        })()}
       </div>
     </div>
   );
