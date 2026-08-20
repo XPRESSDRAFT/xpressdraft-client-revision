@@ -307,6 +307,7 @@ function ProjectsPage({user,onLogout}){
                     </div>
                     <div style={{display:"flex",gap:8,flexShrink:0}}>
                       {ps?.stage&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{ps.stage}</span>}
+                      {ps?.revision&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#EAF3DE",color:"#2E5C10",fontWeight:600}}>{ps.revision}</span>}
                       {ps?.timeline&&<span style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{ps.timeline}</span>}
                     </div>
                   </div>
