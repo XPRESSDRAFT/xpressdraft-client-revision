@@ -219,8 +219,7 @@ router.post('/webhook', async (req, res) => {
       return res.json({ ok: true });
     }
     const { name: clientName, email: clientEmail } = project.client;
-    // Safeguard: don't require payment again if a payment delivery already happened for this stage,
-    // even if the Revision label still reads as first-issue (e.g. label wasn't updated before re-delivery)
+    // Safeguard: don't re-require payment if already paid for this stage, even if Revision label still reads first-issue
     const paymentDeliveryTypes = isWD ? ['wd_final_payment', 'wd_first_payment'] : ['pr_first_payment'];
     const { data: priorPaymentDeliveries } = await supabase.from('deliveries').select('id').eq('project_id', project.id).in('delivery_type', paymentDeliveryTypes).limit(1);
     const alreadyPaidForStage = (priorPaymentDeliveries || []).length > 0;
@@ -502,7 +501,8 @@ router.post('/approve', auth, async (req, res) => {
 router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   console.log('SUBMIT MARKUP HIT');
   try {
-    const { projectId, commentSummary } = req.body;
+    const { projectId, commentSummary, isVariation } = req.body;
+    const variationRequested = isVariation === 'true';
     console.log('Submit received, file:', req.file ? req.file.size + ' bytes' : 'NO FILE');
     console.log('Submit markup for project:', projectId);
     const pdfBuffer = req.file?.buffer;
@@ -549,44 +549,41 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     console.log('Project locked');
     const resendClient = new Resend(process.env.RESEND_API_KEY);
     await resendClient.emails.send({
-      from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
-      to: 'info@xpressdraft.com.au',
+      from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>', to: 'info@xpressdraft.com.au',
       subject: `Client markup submitted — ${jobNumber}`,
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
         <h2 style="color:#2A2B29;">Client markup submitted</h2>
-        <p style="color:#5E635B;font-size:15px;line-height:1.8;">
-          <strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>
-          The marked-up PDF has been uploaded to Monday under the Instructions column.<br/><br/>
-          The item has been moved to <strong>TO BE REVIEWED</strong>.
-        </p>
-        ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin-top:16px;border-left:3px solid #EA672F;">
-          <p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">Comments:</p>
-          <p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p>
-        </div>` : ''}
-        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}"
-           style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:24px;">
-          View in Monday →
-        </a>
+        <p style="color:#5E635B;font-size:15px;line-height:1.8;"><strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>The marked-up PDF has been uploaded to Monday under the Instructions column.<br/><br/>The item has been moved to <strong>TO BE REVIEWED</strong>.</p>
+        ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin-top:16px;border-left:3px solid #EA672F;"><p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">Comments:</p><p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p></div>` : ''}
+        <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:24px;">View in Monday →</a>
       </div>`
     });
     console.log(`Submission notification sent for ${jobNumber}`);
+    if (project.client?.email) {
+      await resendClient.emails.send({
+        from: 'Xpress Draft <noreply@xpressdraft.com.au>', to: project.client.email, cc: 'info@xpressdraft.com.au',
+        subject: `Your change request has been received — ${jobNumber}`,
+        html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
+          <h2 style="color:#2A2B29;">Change request received</h2>
+          <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${clientName},<br/><br/>This confirms we've received your submitted markup and change request for <strong>${jobNumber}</strong>.</p>
+          ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin:16px 0;border-left:3px solid #EA672F;"><p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">What you requested:</p><p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p></div>` : ''}
+          ${variationRequested ? `<p style="color:#5E635B;font-size:15px;line-height:1.8;">As noted before submitting, this revision is beyond your included allowance and will incur a <strong>variation fee</strong>. Our team will be in touch shortly with the cost before proceeding with the work.</p>` : `<p style="color:#5E635B;font-size:15px;line-height:1.8;">Our team will review and respond shortly.</p>`}
+          <p style="color:#5E635B;font-size:13px;line-height:1.8;">Questions? Reach us at <a href="mailto:info@xpressdraft.com.au" style="color:#EA672F;">info@xpressdraft.com.au</a>.</p>
+        </div>`
+      });
+      console.log(`Change request confirmation email sent to client for ${jobNumber}`);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('Submit markup error:', err);
     try {
       const resendClient = new Resend(process.env.RESEND_API_KEY);
       await resendClient.emails.send({
-        from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
-        to: 'info@xpressdraft.com.au',
+        from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>', to: 'info@xpressdraft.com.au',
         subject: `⚠️ Markup submission FAILED — check project ${req.body.projectId || ''}`,
         html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
           <h2 style="color:#E24B4A;">Markup submission failed</h2>
-          <p style="color:#5E635B;font-size:15px;line-height:1.8;">
-            A client's markup submission failed to upload to Monday.<br/><br/>
-            Project ID: <strong>${req.body.projectId || 'unknown'}</strong><br/>
-            Error: <strong>${err.message}</strong><br/><br/>
-            The client has been told their submission may not have gone through. Please check this project manually and re-upload if needed.
-          </p>
+          <p style="color:#5E635B;font-size:15px;line-height:1.8;">A client's markup submission failed to upload to Monday.<br/><br/>Project ID: <strong>${req.body.projectId || 'unknown'}</strong><br/>Error: <strong>${err.message}</strong><br/><br/>The client has been told their submission may not have gone through. Please check this project manually and re-upload if needed.</p>
         </div>`
       });
     } catch (emailErr) { console.error('Failed to send failure notification:', emailErr.message); }
