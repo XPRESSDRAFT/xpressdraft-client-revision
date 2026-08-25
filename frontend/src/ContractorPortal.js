@@ -136,6 +136,13 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
             {job.status==="accepted"&&(
               <div style={{background:"#EAF3DE",border:"1px solid #639922",borderRadius:10,padding:"1.25rem",marginBottom:16,textAlign:"center"}}>
                 <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee</p>
+                {(job.site_visit||job.model_3d||job.renders_3d)&&(
+                  <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:8,flexWrap:"wrap"}}>
+                    {job.site_visit&&<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>Site Visit</span>}
+                    {job.model_3d&&<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>3D Model</span>}
+                    {job.renders_3d&&<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>3D Renders</span>}
+                  </div>
+                )}
               </div>
             )}
             {job.status==="accepted"&&<ContractorUpload jobId={job.id} apiBase={apiBase} token={token} stage={job.project?.stage}/>}
@@ -250,6 +257,9 @@ function ContractorPortal({user,onLogout}){
                     {j.mondayStatus?.stage&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{j.mondayStatus.stage}</span>}
                     {j.mondayStatus?.revision&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:600,border:"1px solid "+B.tone1}}>{j.mondayStatus.revision}</span>}
                     {j.mondayStatus?.timeline&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{j.mondayStatus.timeline}</span>}
+                    {j.status==="accepted"&&j.site_visit&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>Site Visit</span>}
+                    {j.status==="accepted"&&j.model_3d&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>3D Model</span>}
+                    {j.status==="accepted"&&j.renders_3d&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>3D Renders</span>}
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
