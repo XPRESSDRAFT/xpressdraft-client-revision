@@ -16,7 +16,7 @@ function XPDLogo({size=40,variant="color"}){
   return <img src={variant==="white"?white:color} alt="Xpress Draft" style={{height:size,width:"auto",maxHeight:size}}/>;
 }
 
-function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob,apiBase,token}){
+function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob,apiBase,token,onInstructionsViewed}){
   const pd = jobDetails?.proposalDetails;
   const client = jobDetails?.client; // only populated by the backend once job.status === 'accepted'
   const ms = jobDetails?.mondayStatus;
@@ -50,12 +50,13 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
           </div>
         )}
         {tab==="instructions"?(
-          <ContractorInstructions jobId={job.id} apiBase={apiBase} token={token}/>
+          <ContractorInstructions jobId={job.id} apiBase={apiBase} token={token} onViewed={onInstructionsViewed}/>
         ):detailsLoading ? (
           <div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>
         ) : (
           <>
             {job.status==="accepted"&&ms&&<div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14,fontWeight:600,color:B.black}}>Your Acceptance Fee</span><span style={{fontSize:18,fontWeight:700,color:B.orange}}>${jobDetails.dollarFee.toLocaleString()}</span></div>}
+            {job.status==="accepted"&&client&&(
               <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
                 <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 12px"}}>Client Details</h3>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+B.cream}}>
@@ -216,6 +217,7 @@ function ContractorPortal({user,onLogout}){
         declineJob={declineJob}
         apiBase={API}
         token={token()}
+        onInstructionsViewed={()=>setJobs(prev=>prev.map(j=>j.id===selectedJob.id?{...j,hasNewInstructions:false}:j))}
       />
     );
   }
@@ -237,16 +239,22 @@ function ContractorPortal({user,onLogout}){
         {!loading&&jobs.length===0&&<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>No jobs assigned yet.</div>}
         <div style={{display:"grid",gap:12}}>
           {jobs.map(j=>(
-            <div key={j.id} style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem 1.5rem",cursor:"pointer"}} onClick={()=>openJob(j)}>
+            <div key={j.id} style={{background:B.white,border:"1px solid "+(j.hasNewInstructions?B.orange:B.tone1),borderRadius:10,padding:"1.25rem 1.5rem",cursor:"pointer",boxShadow:j.hasNewInstructions?"0 0 0 2px #FEF3E8":"none"}} onClick={()=>openJob(j)}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
                   {j.project?.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444",color:B.cream,fontWeight:600,marginRight:8}}>{j.project.job_number}</span>}
+                  {j.hasNewInstructions&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.orange,color:B.white,fontWeight:700,marginRight:8}}>NEW MARKUP</span>}
                   <span style={{fontWeight:600,fontSize:15,color:B.black}}>{j.project?.site_address||j.project?.name}</span>
-                  <div style={{fontSize:12,color:B.black2,marginTop:4}}>{j.project?.stage==="preliminary"?"Preliminary":"Working Drawings"}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+                    {j.mondayStatus?.jobType&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#F0EEF8",color:"#3D3580",fontWeight:600}}>{j.mondayStatus.jobType}</span>}
+                    {j.mondayStatus?.stage&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{j.mondayStatus.stage}</span>}
+                    {j.mondayStatus?.revision&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:600,border:"1px solid "+B.tone1}}>{j.mondayStatus.revision}</span>}
+                    {j.mondayStatus?.timeline&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{j.mondayStatus.timeline}</span>}
+                  </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:j.status==="accepted"?"#EAF3DE":j.status==="declined"?"#FCEBEB":"#FEF3E8",color:j.status==="accepted"?"#2E5C10":j.status==="declined"?"#8B2020":B.orange,fontWeight:600}}>{j.status.toUpperCase()}</span>
-                  {j.status==="accepted"&&<span style={{fontSize:12,color:B.black2}}>{j.total_fee}%</span>}
+                  {j.status==="accepted"&&<span style={{fontSize:12,color:B.black2}}>{j.total_fee}% (${(j.dollarFee||0).toLocaleString()})</span>}
                 </div>
               </div>
             </div>
