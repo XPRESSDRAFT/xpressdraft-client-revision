@@ -168,8 +168,8 @@ function ContractorPortal({user,onLogout}){
     // instead of waiting for the contractor to re-open the job.
     const refreshed=await fetch(API+"/api/contractor/jobs/"+selectedJob.id+"/details",{headers:{Authorization:"Bearer "+token()}}).then(r=>r.json());
     setJobDetails(refreshed);
-    setJobs(jobs.map(j=>j.id===selectedJob.id?{...j,status:"accepted"}:j));
-    setSelectedJob(prev=>prev?{...prev,status:"accepted"}:prev);
+    setJobs(jobs.map(j=>j.id===selectedJob.id?{...j,status:"accepted",total_fee:totalFee}:j));
+    setSelectedJob(prev=>prev?{...prev,status:"accepted",total_fee:totalFee}:prev);
     alert("Job accepted. You will be notified when drawings are assigned.");
   };
 
