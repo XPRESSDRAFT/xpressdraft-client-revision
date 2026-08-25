@@ -74,6 +74,18 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
                 <a href={pd.agreementUrl} target="_blank" rel="noreferrer" style={{...btnPrimary,fontSize:12,textDecoration:"none"}}>Download →</a>
               </div>
             )}
+            {pd?.proposalFiles?.length>0&&(
+              <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
+                <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 10px"}}>Proposal Files</h3>
+                {pd.proposalFiles.map((f,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:i<pd.proposalFiles.length-1?"1px solid "+B.cream:"none"}}><span style={{fontSize:13,color:B.black1}}>{f.name}</span><a href={f.url} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.orange}}>Download →</a></div>))}
+              </div>
+            )}
+            {pd?.clientFiles?.length>0&&(
+              <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
+                <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 10px"}}>Files Received</h3>
+                {pd.clientFiles.map((f,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:i<pd.clientFiles.length-1?"1px solid "+B.cream:"none"}}><span style={{fontSize:13,color:B.black1}}>{f.name}</span><a href={f.url} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.orange}}>Download →</a></div>))}
+              </div>
+            )}
             {job.status==="pending"&&(
               <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
                 <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 16px"}}>Consultant Fee</h3>
