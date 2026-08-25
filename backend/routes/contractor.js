@@ -33,7 +33,7 @@ async function getProposalDetails(mondayItemId) {
   const data = await mondayApi(`{
     items(ids: [${mondayItemId}]) {
       name
-      column_values(ids: ["long_text_mkxzds8g", "file_mky1n7q2", "numeric_mky1cmcv"]) {
+      column_values(ids: ["long_text_mkxzds8g", "file_mky1n7q2", "numeric_mkxzs5c4"]) {
         id text value
       }
     }
@@ -54,21 +54,30 @@ async function getProposalDetails(mondayItemId) {
   } catch(e) {}
 
   let clientFiles = [];
+  let proposalFiles = [];
   try {
     const overallData = await mondayApi(`{
       items(ids: [${mondayItemId}]) {
-        column_values(ids: ["file_mky1ggt0"]) { id value }
+        column_values(ids: ["file_mky1ggt0", "file_mm1bpafz"]) { id value }
       }
     }`);
-    const fileVal = JSON.parse(overallData?.data?.items?.[0]?.column_values?.[0]?.value || '{}');
-    clientFiles = fileVal?.files || [];
+    const vals = overallData?.data?.items?.[0]?.column_values || [];
+    const receivedCol = vals.find(v => v.id === 'file_mky1ggt0');
+    const proposalsCol = vals.find(v => v.id === 'file_mm1bpafz');
+    const toFileLinks = (raw) => (JSON.parse(raw || '{}')?.files || []).map(f => ({
+      name: f.name,
+      url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`
+    }));
+    clientFiles = toFileLinks(receivedCol?.value);
+    proposalFiles = toFileLinks(proposalsCol?.value);
   } catch(e) {}
 
   return {
     briefing: cols['long_text_mkxzds8g']?.text || '',
-    dealValue: cols['numeric_mky1cmcv']?.text || '0',
+    dealValue: cols['numeric_mkxzs5c4']?.text || '0',
     agreementUrl,
-    clientFiles
+    clientFiles,
+    proposalFiles
   };
 }
 
