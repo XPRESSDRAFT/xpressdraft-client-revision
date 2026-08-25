@@ -3,15 +3,12 @@ const router = express.Router();
 const { supabase } = require('../db');
 const { Resend } = require('resend');
 const crypto = require('crypto');
-
 const resend = new Resend(process.env.RESEND_API_KEY);
-
 const PROPOSALS_BOARD_ID = '18389820785';
 const STARTED_PROJECTS_GROUP = 'group_mky4ey72';
 const CONTRACTOR_COL_PROPOSALS = 'board_relation_mky4v9kn';
 const CONTRACTOR_EMAIL_COL = 'email_mkxzp1qw';
 const CONTRACTOR_PHONE_COL = 'phone_mkxzazqw';
-
 const COL = {
   email:        'email_mky1wg4h',
   jobNumber:    'text_mky9p0t3',
@@ -20,7 +17,6 @@ const COL = {
   revision:     'color_mky4x01c',
   timeline:     'color_mky440wt',
 };
-
 async function mondayApi(query) {
   const res = await fetch('https://api.monday.com/v2', {
     method: 'POST',
@@ -29,7 +25,6 @@ async function mondayApi(query) {
   });
   return res.json();
 }
-
 async function getProposalItem(itemId) {
   const data = await mondayApi(`{
     items(ids: [${itemId}]) {
@@ -40,7 +35,6 @@ async function getProposalItem(itemId) {
   }`);
   return data?.data?.items?.[0];
 }
-
 async function getContractorFromRelation(itemId, columnId) {
   const data = await mondayApi(`{
     items(ids: [${itemId}]) {
@@ -64,43 +58,31 @@ async function getContractorFromRelation(itemId, columnId) {
   ci.column_values.forEach(c => { cols[c.id] = c.text || ''; });
   return { name: ci.name, email: cols[CONTRACTOR_EMAIL_COL], phone: cols[CONTRACTOR_PHONE_COL] };
 }
-
 router.post('/webhook', async (req, res) => {
   try {
     if (req.body.challenge) return res.json({ challenge: req.body.challenge });
-
     const event = req.body.event;
     if (!event) return res.json({ ok: true });
-
     console.log('Proposals webhook event:', JSON.stringify(event).substring(0, 200));
-
     const { pulseId, groupId, destGroupId } = event;
     const targetGroup = destGroupId || groupId;
-
     if (targetGroup !== STARTED_PROJECTS_GROUP) {
       return res.json({ ok: true });
     }
-
     console.log(`Item ${pulseId} moved to STARTED PROJECTS`);
-
     const item = await getProposalItem(pulseId);
     if (!item) return res.json({ ok: true });
-
     const cols = {};
     item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
-
     const clientName = item.name;
     const clientEmail = cols[COL.email];
     const jobNumber = cols[COL.jobNumber];
     const siteAddress = cols[COL.siteAddress];
-
     console.log(`Client: ${clientName}, Email: ${clientEmail}, Job: ${jobNumber}, Site: ${siteAddress}`);
-
     if (!clientEmail) {
       console.error('No client email found for item:', pulseId);
       return res.json({ ok: true });
     }
-
     // Get contractor from Proposals board relation
     let contractorId = null;
     try {
@@ -120,14 +102,12 @@ router.post('/webhook', async (req, res) => {
         console.log(`Contractor linked: ${contractor.name}`);
       }
     } catch(e) { console.error('Contractor error:', e.message); }
-
     // Check if user exists in portal, create if not
     let { data: user } = await supabase
       .from('users')
       .select('*')
       .eq('email', clientEmail.toLowerCase().trim())
       .single();
-
     if (!user) {
       const { data: newUser, error } = await supabase
         .from('users')
@@ -140,7 +120,6 @@ router.post('/webhook', async (req, res) => {
       user = newUser;
       console.log('Created new user:', user.id);
     }
-
     // Find or create portal project
     let { data: project } = await supabase
       .from('projects')
@@ -148,7 +127,6 @@ router.post('/webhook', async (req, res) => {
       .eq('job_number', jobNumber)
       .ilike('site_address', `%${siteAddress}%`)
       .single();
-
     if (!project) {
       const { data: newProject } = await supabase
         .from('projects')
@@ -171,7 +149,6 @@ router.post('/webhook', async (req, res) => {
         is_working_partner: contractorId !== null
       }).eq('id', project.id);
     }
-
     // Create contractor job offer if contractor assigned
     if (contractorId && project) {
       try {
@@ -187,10 +164,9 @@ router.post('/webhook', async (req, res) => {
         }
       } catch(e) { console.error('Contractor job error:', e.message); }
     }
-
     // Generate magic link
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // 6 months
     await supabase.from('magic_links').insert({
       email: clientEmail.toLowerCase().trim(),
       token,
@@ -198,7 +174,6 @@ router.post('/webhook', async (req, res) => {
     });
     const portalUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
     const projectRef = [jobNumber, siteAddress].filter(Boolean).join(' — ');
-
     // Send welcome email
     await resend.emails.send({
       from: 'Xpress Draft <noreply@xpressdraft.com.au>',
@@ -223,16 +198,13 @@ router.post('/webhook', async (req, res) => {
         <p style="color:#A9A09B;font-size:13px;margin-top:32px;">The Xpress Draft Team</p>
       </div>`
     });
-
     console.log(`Welcome email sent to ${clientEmail} for ${projectRef}`);
     res.json({ ok: true });
-
   } catch (err) {
     console.error('Proposals webhook error:', err);
     res.status(500).json({ error: err.message });
   }
 });
-
 // Get project status for client dashboard
 router.get('/project-status/:projectId', async (req, res) => {
   try {
@@ -241,19 +213,22 @@ router.get('/project-status/:projectId', async (req, res) => {
       .select('monday_item_id, job_number, site_address, is_working_partner, contractor_id')
       .eq('id', req.params.projectId)
       .single();
-
+    // Designer info is only shown to the client once the contractor has
+    // actually accepted the job — not merely assigned/pending.
+    const getAcceptedDesigner = async () => {
+      if (!project?.is_working_partner || !project?.contractor_id) return { designerName: null, designerPhone: null };
+      const { data: acceptedJob } = await supabase
+        .from('contractor_jobs').select('id').eq('project_id', req.params.projectId)
+        .eq('contractor_id', project.contractor_id).eq('status', 'accepted').maybeSingle();
+      if (!acceptedJob) return { designerName: null, designerPhone: null };
+      const { data: contractor } = await supabase
+        .from('users').select('name, phone').eq('id', project.contractor_id).single();
+      return contractor ? { designerName: contractor.name, designerPhone: contractor.phone } : { designerName: null, designerPhone: null };
+    };
     if (!project?.monday_item_id) {
-      // Still return contractor info even without Monday item
-      let designerName = null;
-      let designerPhone = null;
-      if (project?.is_working_partner && project?.contractor_id) {
-        const { data: contractor } = await supabase
-          .from('users').select('name, phone').eq('id', project.contractor_id).single();
-        if (contractor) { designerName = contractor.name; designerPhone = contractor.phone; }
-      }
+      const { designerName, designerPhone } = await getAcceptedDesigner();
       return res.json({ status: null, designerName, designerPhone });
     }
-
     const data = await mondayApi(`{
       items(ids: [${project.monday_item_id}]) {
         column_values(ids: ["${COL.stage}", "${COL.revision}", "${COL.timeline}"]) {
@@ -261,19 +236,10 @@ router.get('/project-status/:projectId', async (req, res) => {
         }
       }
     }`);
-
     const cols = {};
     const colVals = data?.data?.items?.[0]?.column_values || [];
     colVals.forEach(c => { cols[c.id] = c.text || ''; });
-
-    let designerName = null;
-    let designerPhone = null;
-    if (project.is_working_partner && project.contractor_id) {
-      const { data: contractor } = await supabase
-        .from('users').select('name, phone').eq('id', project.contractor_id).single();
-      if (contractor) { designerName = contractor.name; designerPhone = contractor.phone; }
-    }
-
+    const { designerName, designerPhone } = await getAcceptedDesigner();
     res.json({
       stage: cols[COL.stage] || '—',
       revision: cols[COL.revision] || '—',
@@ -282,11 +248,9 @@ router.get('/project-status/:projectId', async (req, res) => {
       designerName,
       designerPhone
     });
-
   } catch (err) {
     console.error('Project status error:', err);
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;
