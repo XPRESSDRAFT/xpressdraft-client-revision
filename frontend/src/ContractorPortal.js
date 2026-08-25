@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import ContractorUpload from "./ContractorUpload";
+import ContractorInstructions from "./ContractorInstructions";
 
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
@@ -18,6 +19,8 @@ function XPDLogo({size=40,variant="color"}){
 function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,updateFee,acceptJob,declineJob,apiBase,token}){
   const pd = jobDetails?.proposalDetails;
   const client = jobDetails?.client; // only populated by the backend once job.status === 'accepted'
+  const ms = jobDetails?.mondayStatus;
+  const [tab,setTab]=useState("overview");
   return (
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:12}}>
@@ -26,16 +29,33 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
         <button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>
       </nav>
       <div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}>
-        <div style={{marginBottom:24}}>
+        <div style={{marginBottom:16}}>
           {job.project?.job_number&&<span style={{fontSize:12,padding:"2px 10px",borderRadius:20,background:"#444",color:B.cream,fontWeight:600,marginRight:8}}>{job.project.job_number}</span>}
           <h1 style={{fontSize:22,fontWeight:700,color:B.black,margin:"8px 0 4px"}}>{job.project?.site_address||job.project?.name}</h1>
           <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:job.status==="accepted"?"#EAF3DE":job.status==="declined"?"#FCEBEB":"#FEF3E8",color:job.status==="accepted"?"#2E5C10":job.status==="declined"?"#8B2020":B.orange,fontWeight:600}}>{job.status.toUpperCase()}</span>
         </div>
-        {detailsLoading ? (
+        {ms&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#F0EEF8",color:"#3D3580",fontWeight:600}}>{ms.jobType}</span>
+            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{ms.stage}</span>
+            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:600,border:"1px solid "+B.tone1}}>{ms.revision}</span>
+            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{ms.timeline}</span>
+          </div>
+        )}
+        {job.status==="accepted"&&(
+          <div style={{display:"flex",gap:8,marginBottom:16,borderBottom:"1px solid "+B.tone1}}>
+            {[["overview","Overview"],["instructions","Instructions & Markups"]].map(([id,label])=>(
+              <div key={id} onClick={()=>setTab(id)} style={{padding:"8px 4px",borderBottom:"2px solid "+(tab===id?B.orange:"transparent"),color:tab===id?B.orange:B.black2,fontWeight:tab===id?600:400,fontSize:13,cursor:"pointer"}}>{label}</div>
+            ))}
+          </div>
+        )}
+        {tab==="instructions"?(
+          <ContractorInstructions jobId={job.id} apiBase={apiBase} token={token}/>
+        ):detailsLoading ? (
           <div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>
         ) : (
           <>
-            {job.status==="accepted"&&client&&(
+            {job.status==="accepted"&&ms&&<div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14,fontWeight:600,color:B.black}}>Your Acceptance Fee</span><span style={{fontSize:18,fontWeight:700,color:B.orange}}>${jobDetails.dollarFee.toLocaleString()}</span></div>}
               <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
                 <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 12px"}}>Client Details</h3>
                 <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+B.cream}}>
