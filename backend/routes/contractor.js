@@ -29,6 +29,33 @@ async function clearBoardRelation(boardId, itemId, columnId) {
   }`);
 }
 
+// Batch-fetches live stage/revision/timeline/job type/deal value for
+// multiple Monday items in a single call, so the job list doesn't need
+// one API call per job. Values are always read live — never cached in
+// Supabase — so anything changed on Monday is reflected immediately.
+async function getBatchMondayStatus(itemIds) {
+  if (itemIds.length === 0) return {};
+  const data = await mondayApi(`{
+    items(ids: [${itemIds.join(',')}]) {
+      id
+      column_values(ids: ["color_mky4a52f", "color_mky4x01c", "color_mky440wt", "color_mkxz7cf9", "numeric_mkxzs5c4"]) { id text }
+    }
+  }`);
+  const map = {};
+  (data?.data?.items || []).forEach(item => {
+    const cols = {};
+    item.column_values.forEach(c => { cols[c.id] = c.text || ''; });
+    map[item.id] = {
+      stage: cols['color_mky4a52f'] || '—',
+      revision: cols['color_mky4x01c'] || '—',
+      timeline: cols['color_mky440wt'] || '—',
+      jobType: cols['color_mkxz7cf9'] || '—',
+      dealValue: parseFloat(cols['numeric_mkxzs5c4']) || 0,
+    };
+  });
+  return map;
+}
+
 async function getProposalDetails(mondayItemId) {
   const data = await mondayApi(`{
     items(ids: [${mondayItemId}]) {
@@ -88,11 +115,22 @@ router.get('/jobs', auth, async (req, res) => {
 
     const { data: jobs } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at)`)
       .eq('contractor_id', req.user.id)
       .order('created_at', { ascending: false });
 
-    res.json({ jobs: jobs || [] });
+    const itemIds = (jobs || []).map(j => j.project?.monday_item_id).filter(Boolean);
+    const statusMap = await getBatchMondayStatus(itemIds);
+
+    const enriched = (jobs || []).map(j => {
+      const mondayStatus = j.project?.monday_item_id ? statusMap[j.project.monday_item_id] : null;
+      const dollarFee = mondayStatus ? Math.round((mondayStatus.dealValue * (j.total_fee || 0)) / 100) : 0;
+      const hasNewInstructions = !!(j.project?.last_instructions_at &&
+        (!j.instructions_viewed_at || new Date(j.project.last_instructions_at) > new Date(j.instructions_viewed_at)));
+      return { ...j, mondayStatus, dollarFee, hasNewInstructions };
+    });
+
+    res.json({ jobs: enriched });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -107,7 +145,7 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
 
     const { data: job } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at)`)
       .eq('id', req.params.jobId)
       .eq('contractor_id', req.user.id)
       .single();
@@ -115,9 +153,13 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
     let proposalDetails = null;
+    let mondayStatus = null;
     if (job.project?.monday_item_id) {
       proposalDetails = await getProposalDetails(job.project.monday_item_id);
+      const statusMap = await getBatchMondayStatus([job.project.monday_item_id]);
+      mondayStatus = statusMap[job.project.monday_item_id] || null;
     }
+    const dollarFee = mondayStatus ? Math.round((mondayStatus.dealValue * (job.total_fee || 0)) / 100) : 0;
 
     let client = null;
     if (job.status === 'accepted' && job.project?.client_id) {
@@ -129,7 +171,30 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
       client = clientUser || null;
     }
 
-    res.json({ job, proposalDetails, client });
+    res.json({ job, proposalDetails, client, mondayStatus, dollarFee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Full instructions/markup history for this job's project, oldest first.
+// Opening this tab also marks it viewed, clearing the "new" highlight.
+router.get('/jobs/:jobId/instructions', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+
+    const { data: job } = await supabase
+      .from('contractor_jobs').select('id, project_id')
+      .eq('id', req.params.jobId).eq('contractor_id', req.user.id).single();
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    const { data: entries } = await supabase
+      .from('job_instructions').select('*')
+      .eq('project_id', job.project_id).order('created_at', { ascending: true });
+
+    await supabase.from('contractor_jobs').update({ instructions_viewed_at: new Date().toISOString() }).eq('id', job.id);
+
+    res.json({ entries: entries || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
