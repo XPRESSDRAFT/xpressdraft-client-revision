@@ -21,9 +21,9 @@ app.use('/api/projects/:projectId/drawings', require('./routes/drawings'));
 app.use('/api/drawings/:drawingId/comments', require('./routes/comments'));
 app.use('/api/drawings/:drawingId/markups',  require('./routes/markups'));
 app.use('/api/monday',     require('./routes/monday'));
+app.use('/api/monday',     require('./routes/monday-contractor'));
 app.use('/api/health',     require('./routes/health'));
 app.use('/api/proposals',  require('./routes/proposals'));
-app.use('/api/contractor', require('./routes/contractor'));
 app.use('/api/contractor', require('./routes/contractor'));
 app.use('/api/contractor-files', require('./routes/contractor-files'));
 app.use((err, req, res, next) => {
