@@ -26,6 +26,7 @@ app.use('/api/monday',     require('./routes/monday-instructions'));
 app.use('/api/health',     require('./routes/health'));
 app.use('/api/proposals',  require('./routes/proposals'));
 app.use('/api/contractor', require('./routes/contractor'));
+app.use('/api/contractor', require('./routes/contractor-invoices'));
 app.use('/api/contractor-files', require('./routes/contractor-files'));
 app.use((err, req, res, next) => {
   console.error(err.stack);
