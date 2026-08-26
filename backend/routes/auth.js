@@ -43,7 +43,7 @@ router.post('/magic-link', async (req, res) => {
       .eq('email', email.toLowerCase().trim())
       .single();
 
-    if (error || !user) {
+    if (error || !user || user.active === false) {
       return res.json({ message: 'If this email is registered, a login link has been sent.' });
     }
 
@@ -101,7 +101,6 @@ router.post('/verify', async (req, res) => {
       .from('magic_links')
       .select('*')
       .eq('token', token)
-      .eq('used', false)
       .single();
 
     if (error || !link) return res.status(400).json({ error: 'Invalid or expired link' });
@@ -109,6 +108,10 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ error: 'This link has expired. Please request a new one.' });
     }
 
+    // Magic links are intentionally reusable within their validity window
+    // (rather than single-use) — clients are expected to find this same
+    // email again rather than bookmark a URL, so it needs to keep working
+    // every time until it naturally expires or their account is suspended.
     await supabase.from('magic_links').update({ used: true }).eq('id', link.id);
 
     const { data: user } = await supabase
@@ -116,6 +119,9 @@ router.post('/verify', async (req, res) => {
       .select('*')
       .eq('email', link.email)
       .single();
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired link' });
+    if (user.active === false) return res.status(403).json({ error: 'This account has been suspended. Please contact Xpress Draft.' });
 
     if (user.role === 'client') {
       const { data: projects } = await supabase
