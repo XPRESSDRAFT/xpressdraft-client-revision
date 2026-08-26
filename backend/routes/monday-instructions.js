@@ -63,33 +63,44 @@ router.post('/instructions-updated', async (req, res) => {
     let changed = false;
 
     if (textVal) {
-      await supabase.from('job_instructions').insert({
-        project_id: project.id, source: 'xpressdraft', content_type: 'text', content: textVal, revision_label: revisionLabel
-      });
-      changed = true;
-      // Notify the assigned contractor directly — the in-portal badge alone
-      // isn't enough to guarantee they see it promptly.
-      try {
-        const { data: fullProject } = await supabase
-          .from('projects').select('contractor_id, job_number, site_address, name').eq('id', project.id).single();
-        if (fullProject?.contractor_id) {
-          const { data: contractorUser } = await supabase
-            .from('users').select('name, email').eq('id', fullProject.contractor_id).single();
-          if (contractorUser?.email) {
-            const jobRef = [fullProject.job_number, fullProject.site_address].filter(Boolean).join(' — ') || fullProject.name;
-            await resend.emails.send({
-              from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
-              to: contractorUser.email,
-              subject: `New instructions received — ${jobRef}`,
-              html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
-                <h2 style="color:#2A2B29;">New instructions from Xpress Draft</h2>
-                <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${contractorUser.name},<br/><br/>New instructions have been added for <strong>${jobRef}</strong>. Please check the Instructions &amp; Markups tab in your portal.</p>
-                <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open Contractor Portal →</a>
-              </div>`
-            });
+      // Guard against duplicate webhook deliveries (Monday retries, or two
+      // webhooks accidentally scoped to the same column) — skip if the
+      // most recent text entry for this project already has this exact
+      // content.
+      const { data: lastEntry } = await supabase
+        .from('job_instructions').select('content').eq('project_id', project.id).eq('content_type', 'text')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const isDuplicate = lastEntry && lastEntry.content === textVal;
+
+      if (!isDuplicate) {
+        await supabase.from('job_instructions').insert({
+          project_id: project.id, source: 'xpressdraft', content_type: 'text', content: textVal, revision_label: revisionLabel
+        });
+        changed = true;
+        // Notify the assigned contractor directly — the in-portal badge alone
+        // isn't enough to guarantee they see it promptly.
+        try {
+          const { data: fullProject } = await supabase
+            .from('projects').select('contractor_id, job_number, site_address, name').eq('id', project.id).single();
+          if (fullProject?.contractor_id) {
+            const { data: contractorUser } = await supabase
+              .from('users').select('name, email').eq('id', fullProject.contractor_id).single();
+            if (contractorUser?.email) {
+              const jobRef = [fullProject.job_number, fullProject.site_address].filter(Boolean).join(' — ') || fullProject.name;
+              await resend.emails.send({
+                from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
+                to: contractorUser.email,
+                subject: `New instructions received — ${jobRef}`,
+                html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+                  <h2 style="color:#2A2B29;">New instructions from Xpress Draft</h2>
+                  <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${contractorUser.name},<br/><br/>New instructions have been added for <strong>${jobRef}</strong>. Please check the Instructions &amp; Markups tab in your portal.</p>
+                  <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open Contractor Portal →</a>
+                </div>`
+              });
+            }
           }
-        }
-      } catch (emailErr) { console.error('Contractor instructions email error:', emailErr.message); }
+        } catch (emailErr) { console.error('Contractor instructions email error:', emailErr.message); }
+      }
     }
 
     let files = [];
