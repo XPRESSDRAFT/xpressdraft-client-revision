@@ -6,6 +6,7 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const { auth } = require('../middleware/auth');
 const resend = new Resend(process.env.RESEND_API_KEY);
+const { sendAdminSms } = require('../utils/sms');
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
   deliveryFile:   'file_mm67ta3v',
@@ -576,6 +577,7 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Submit markup error:', err);
+    await sendAdminSms(`⚠️ Markup submission FAILED for project ${req.body.projectId || 'unknown'}. Check email for details.`);
     try {
       const resendClient = new Resend(process.env.RESEND_API_KEY);
       await resendClient.emails.send({
