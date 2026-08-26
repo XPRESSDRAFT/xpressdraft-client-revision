@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ContractorUpload from "./ContractorUpload";
 import ContractorInstructions from "./ContractorInstructions";
 import ContractorInvoices from "./ContractorInvoices";
+import Chat from "./Chat";
 
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
@@ -45,7 +46,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
         )}
         {job.status==="accepted"&&(
           <div style={{display:"flex",gap:8,marginBottom:16,borderBottom:"1px solid "+B.tone1}}>
-            {[["overview","Overview"],["instructions","Instructions & Markups"],["payments","Payments"]].map(([id,label])=>(
+            {[["overview","Overview"],["instructions","Instructions & Markups"],["payments","Payments"],["messages","Messages"]].map(([id,label])=>(
               <div key={id} onClick={()=>setTab(id)} style={{padding:"8px 4px",borderBottom:"2px solid "+(tab===id?B.orange:"transparent"),color:tab===id?B.orange:B.black2,fontWeight:tab===id?600:400,fontSize:13,cursor:"pointer"}}>{label}</div>
             ))}
           </div>
@@ -54,6 +55,8 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
           <ContractorInstructions jobId={job.id} apiBase={apiBase} token={token} onViewed={onInstructionsViewed}/>
         ):tab==="payments"?(
           <ContractorInvoices jobId={job.id} apiBase={apiBase} token={token}/>
+        ):tab==="messages"?(
+          <Chat fetchUrl={"/api/contractor/jobs/"+job.id+"/messages"} apiBase={apiBase} token={token} currentRole="contractor"/>
         ):detailsLoading ? (
           <div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>
         ) : (
