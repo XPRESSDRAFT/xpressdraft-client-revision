@@ -17,6 +17,80 @@ from: 'Xpress Draft <noreply@xpressdraft.com.au>',
   if (error) throw new Error(error.message);
 }
 
+// Builds the subject + HTML body for an invite/access email, tailored to the
+// user's role. Contractors get copy describing the Contractor Portal
+// (available jobs, project history, fees, client details, briefs) rather
+// than the client-facing "your plans are ready" copy.
+function buildInviteEmail(user, loginUrl) {
+  if (user.role === 'contractor') {
+    return {
+      subject: 'Your access to the Xpress Draft Contractor Portal',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Welcome to the Contractor Portal</h2>
+        <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:24px">
+          Hi ${user.name},<br/><br/>
+          You now have access to the Xpress Draft Contractor Portal, where you can:
+        </p>
+        <ul style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:32px;padding-left:20px;">
+          <li>See all jobs currently available to you</li>
+          <li>View the history of projects you've worked on</li>
+          <li>Check agreed payable fees for each job</li>
+          <li>Access client details and project briefings</li>
+          <li>Upload your invoices directly against a project</li>
+          <li>Track payment status once it's confirmed</li>
+        </ul>
+        <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+          Access the Contractor Portal →
+        </a>
+        <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
+          This link is valid for 6 months. Questions? Contact us at info@xpressdraft.com.au
+        </p>
+      </div>`
+    };
+  }
+  return {
+    subject: 'Your plans are ready — Xpress Draft',
+    html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+      <h2 style="color:#2A2B29;">Your plans are ready to review</h2>
+      <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:32px">
+        Hi ${user.name},<br/><br/>
+        Your drawings are ready for review on the Xpress Draft client portal.
+        Click below to access your plans. This link is valid for 6 months.
+      </p>
+      <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+        Review my plans →
+      </a>
+      <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
+        Questions? Contact us at info@xpressdraft.com.au
+      </p>
+    </div>`
+  };
+}
+
+// Same idea, for the "resend invite" flow — shorter copy but still role-aware.
+function buildResendEmail(user, loginUrl) {
+  if (user.role === 'contractor') {
+    return {
+      subject: 'Access your Xpress Draft Contractor Portal',
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Access the Contractor Portal</h2>
+        <p style="color:#5E635B;line-height:1.6;">Hi ${user.name}, here is your updated access link to the Contractor Portal — your jobs, project history, fees, client details and briefings.</p>
+        <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Access the Contractor Portal →</a>
+        <p style="color:#A9A09B;font-size:13px;margin-top:32px;">This link is valid for 6 months.</p>
+      </div>`
+    };
+  }
+  return {
+    subject: 'Access your Xpress Draft plans',
+    html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+      <h2 style="color:#2A2B29;">Access your plans</h2>
+      <p style="color:#5E635B;line-height:1.6;">Hi ${user.name}, here is your updated access link.</p>
+      <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Review my plans →</a>
+      <p style="color:#A9A09B;font-size:13px;margin-top:32px;">This link is valid for 6 months.</p>
+    </div>`
+  };
+}
+
 router.post('/', auth, teamOnly, async (req, res) => {
   try {
     const { name, email, role = 'client', sendInvite = false } = req.body;
@@ -35,29 +109,13 @@ router.post('/', auth, teamOnly, async (req, res) => {
 
     if (sendInvite) {
       const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // 6 months
       await supabase.from('magic_links').insert({
         email: user.email, token, expires_at: expiresAt.toISOString()
       });
       const loginUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
-      await sendEmail(
-        user.email,
-        'Your plans are ready — Xpress Draft',
-        `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
-          <h2 style="color:#2A2B29;">Your plans are ready to review</h2>
-          <p style="color:#5E635B;font-size:15px;line-height:1.6;margin-bottom:32px">
-            Hi ${name},<br/><br/>
-            Your drawings are ready for review on the Xpress Draft client portal.
-            Click below to access your plans. This link is valid for 48 hours.
-          </p>
-          <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
-            Review my plans →
-          </a>
-          <p style="color:#A9A09B;font-size:13px;margin-top:32px;">
-            Questions? Contact us at info@xpressdraft.com.au
-          </p>
-        </div>`
-      );
+      const { subject, html } = buildInviteEmail(user, loginUrl);
+      await sendEmail(user.email, subject, html);
     }
 
     res.status(201).json({ user });
@@ -70,7 +128,7 @@ router.post('/', auth, teamOnly, async (req, res) => {
 router.get('/', auth, teamOnly, async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('users').select('id, name, email, role, created_at')
+      .from('users').select('id, name, email, role, created_at, active')
       .neq('role', 'admin')
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -87,22 +145,14 @@ router.post('/:id/invite', auth, teamOnly, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // 6 months
     await supabase.from('magic_links').insert({
       email: user.email, token, expires_at: expiresAt.toISOString()
     });
 
     const loginUrl = `${process.env.FRONTEND_URL}/auth/verify?token=${token}`;
-    await sendEmail(
-      user.email,
-      'Access your Xpress Draft plans',
-      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
-        <h2 style="color:#2A2B29;">Access your plans</h2>
-        <p style="color:#5E635B;line-height:1.6;">Hi ${user.name}, here is your updated access link.</p>
-        <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Review my plans →</a>
-        <p style="color:#A9A09B;font-size:13px;margin-top:32px;">This link expires in 48 hours.</p>
-      </div>`
-    );
+    const { subject, html } = buildResendEmail(user, loginUrl);
+    await sendEmail(user.email, subject, html);
 
     res.json({ message: 'Invite sent' });
   } catch (err) {
@@ -124,12 +174,18 @@ router.delete('/:id', auth, teamOnly, async (req, res) => {
 });
 router.put('/:id', auth, teamOnly, async (req, res) => {
   try {
-    const { name, email, role, phone } = req.body;
+    const { name, email, role, phone, active } = req.body;
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (email !== undefined) updates.email = email.toLowerCase().trim();
     if (role !== undefined) updates.role = role;
     if (phone !== undefined) updates.phone = phone;
+    // Suspend/reactivate is admin-only — team members can edit basic
+    // details but shouldn't be able to lock other accounts out.
+    if (active !== undefined) {
+      if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only admins can suspend or reactivate accounts' });
+      updates.active = active;
+    }
 
     const { data, error } = await supabase
       .from('users').update(updates).eq('id', req.params.id)
