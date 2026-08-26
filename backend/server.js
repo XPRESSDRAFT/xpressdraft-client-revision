@@ -27,6 +27,8 @@ app.use('/api/health',     require('./routes/health'));
 app.use('/api/proposals',  require('./routes/proposals'));
 app.use('/api/contractor', require('./routes/contractor'));
 app.use('/api/contractor', require('./routes/contractor-invoices'));
+app.use('/api/projects/:projectId/messages', require('./routes/messages'));
+app.use('/api/contractor/jobs/:jobId/messages', require('./routes/contractor-messages'));
 app.use('/api/contractor-files', require('./routes/contractor-files'));
 app.use((err, req, res, next) => {
   console.error(err.stack);
