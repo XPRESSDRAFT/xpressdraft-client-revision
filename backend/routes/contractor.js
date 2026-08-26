@@ -5,6 +5,7 @@ const { auth } = require('../middleware/auth');
 const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const { sendAdminSms } = require('../utils/sms');
 
 const PROPOSALS_BOARD_ID = '18389820785';
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
@@ -353,7 +354,9 @@ router.post('/jobs/:jobId/decline', auth, async (req, res) => {
 
     const jobRef = [job.project.job_number, job.project.site_address].filter(Boolean).join(' — ');
 
-    // Notify admin by email (SMS to be added later)
+    // Notify admin by email and SMS — decline means the project needs
+    // reassigning, so it needs to be seen quickly.
+    await sendAdminSms(`⚠️ Contractor declined: ${req.user.name} declined ${jobRef}. Reassignment needed.`);
     await resend.emails.send({
       from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
       to: 'info@xpressdraft.com.au',
