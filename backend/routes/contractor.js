@@ -213,9 +213,25 @@ router.put('/jobs/:jobId/fee', auth, async (req, res) => {
       .update({ site_visit: siteVisit, model_3d: model3d, renders_3d: renders3d, total_fee: totalFee })
       .eq('id', req.params.jobId)
       .eq('contractor_id', req.user.id)
-      .select().single();
+      .select(`*, project:projects(monday_item_id)`).single();
 
     if (error) throw error;
+
+    // Push the live dollar fee to Monday so it stays in sync as the
+    // contractor toggles optional extras — not just once they accept.
+    try {
+      if (data.project?.monday_item_id) {
+        const dvData = await mondayApi(`{
+          items(ids: [${data.project.monday_item_id}]) { column_values(ids: ["numeric_mkxzs5c4"]) { text } }
+        }`);
+        const dealValue = parseFloat(dvData?.data?.items?.[0]?.column_values?.[0]?.text) || 0;
+        const dollarFee = Math.round((dealValue * totalFee) / 100);
+        await mondayApi(`mutation {
+          change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${data.project.monday_item_id}, column_id: "numeric_mm6kq445", value: "${dollarFee}") { id }
+        }`);
+      }
+    } catch (mondayErr) { console.error('Fee sync to Monday error:', mondayErr.message); }
+
     res.json({ job: data, totalFee });
   } catch (err) {
     res.status(500).json({ error: err.message });
