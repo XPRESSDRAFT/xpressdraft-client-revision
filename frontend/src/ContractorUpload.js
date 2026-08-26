@@ -88,7 +88,7 @@ export default function ContractorUpload({ jobId, apiBase, token, stage }) {
       <ActionRow label="Delivery file(s)" hint={stage==="working_drawings"?"Requires a PDF and a DWG for client delivery":"Requires a PDF for client delivery"} done={status.deliveryFileDone} doneLabel={status.deliveryFileNames?.length?status.deliveryFileNames.join(", "):"Uploaded"} busy={busyAction==="delivery"} triggerLabel="Upload file(s)" onTrigger={()=>deliveryInputRef.current?.click()} />
       <input ref={deliveryInputRef} type="file" multiple style={{display:"none"}} onChange={e=>uploadDelivery(e.target.files)} />
 
-      <ActionRow label="Backup storage" hint="Upload all working files to the drive, then confirm here" done={status.storageConfirmed} doneLabel="Confirmed" busy={busyAction==="storage"} triggerLabel="Mark as done" onTrigger={confirmStorage} isLink={!status.storageConfirmed} linkHref={status.storageLink} />
+      <ActionRow label="Backup storage" hint="Upload all files here" done={status.storageConfirmed} doneLabel="Confirmed" busy={busyAction==="storage"} triggerLabel="Mark as done" onTrigger={confirmStorage} isLink={!status.storageConfirmed} linkHref={status.storageLink} />
     </div>
   );
 }
