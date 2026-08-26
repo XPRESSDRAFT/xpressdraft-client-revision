@@ -48,7 +48,7 @@ router.post('/magic-link', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // 6 months
 
     await supabase.from('magic_links').insert({
       email: user.email,
@@ -68,7 +68,7 @@ router.post('/magic-link', async (req, res) => {
           <p style="color:#5E635B;font-size:15px;line-height:1.8;margin-bottom:32px">
             Hi ${user.name},<br/><br/>
             Click the button below to access your Xpress Draft portal.<br/><br/>
-            This link expires in 48 hours.
+            This link is valid for 6 months.
           </p>
           <a href="${loginUrl}" style="display:inline-block;background:#EA672F;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
             ${user.role === 'client' ? 'Access my portal →' : 'Access portal →'}
@@ -132,10 +132,13 @@ router.post('/verify', async (req, res) => {
       }
     }
 
+    // Session token matches the magic link's 6-month duration — otherwise
+    // a client would still be forced to re-click a login link every 7 days
+    // even though the link itself stays valid for months.
     const jwtToken = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '180d' }
     );
 
     res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
