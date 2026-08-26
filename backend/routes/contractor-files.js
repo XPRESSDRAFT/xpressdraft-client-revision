@@ -176,6 +176,12 @@ router.post('/:jobId/delivery', auth, upload.array('files', 5), async (req, res)
     if (!job || !job.project?.monday_item_id) return res.status(404).json({ error: 'Job or Monday link not found' });
 
     const { stageKey, letter } = await getMondayContext(job.project.monday_item_id);
+    const ext = (name) => (name.split('.').pop() || '').toLowerCase();
+    const hasPdf = req.files.some(f => ext(f.originalname) === 'pdf');
+    const hasDwg = req.files.some(f => ext(f.originalname) === 'dwg');
+    if (!hasPdf) return res.status(400).json({ error: 'A PDF is required for the delivery upload.' });
+    if (stageKey === 'working_drawings' && !hasDwg) return res.status(400).json({ error: 'Working Drawings delivery requires both a PDF and a DWG file.' });
+
     const columnId = pickDeliveryColumn(stageKey, letter);
     for (const f of req.files) {
       await uploadFileToMondayColumn(job.project.monday_item_id, columnId, f.buffer, f.originalname, f.mimetype);
