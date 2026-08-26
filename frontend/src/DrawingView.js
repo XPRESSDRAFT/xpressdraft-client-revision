@@ -15,6 +15,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const canvasRef=useRef();
   const markupRef=useRef();
   const wrapRef=useRef();
+  const attachFileRef=useRef();
+  const [attaching,setAttaching]=useState(false);
   const [comments,setComments]=useState([]);
   const allMarkupsRef=useRef({});
   const [allMarkupDims,setAllMarkupDims]=useState({});
@@ -273,6 +275,17 @@ const generateMarkupPdf=async()=>{
   };
 
   const handleExportPDF=()=>setShowExportDialog(true);
+  const attachFile=async(file)=>{
+    if(!file)return;
+    setAttaching(true);
+    const fd=new FormData();fd.append("file",file);
+    try{
+      const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/attachments/"+project.id,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
+      if(!r.ok)throw new Error((await r.json()).error||"Upload failed");
+      alert("File attached and sent to Xpress Draft.");
+    }catch(e){alert("Failed to attach file: "+e.message);}
+    setAttaching(false);
+  };
 
   const doExport=async()=>{
     if(!pdfDoc){alert("No drawing loaded.");return;}
@@ -377,6 +390,8 @@ const generateMarkupPdf=async()=>{
         {totalPages>1&&<div style={{display:"flex",alignItems:"center",gap:4,background:B.cream,border:"1px solid "+B.orange,borderRadius:8,padding:"4px 6px"}}><button onClick={()=>{const np=Math.max(1,page-1);setPage(np);loadPage(np);}} disabled={page===1} style={{padding:"5px 11px",background:B.white,color:page===1?B.tone2:B.orange,border:"1px solid "+B.tone1,borderRadius:6,cursor:page===1?"default":"pointer",fontSize:16,fontWeight:700,fontFamily:"Manrope,sans-serif"}}>&#8249;</button><span style={{fontSize:13,fontWeight:700,color:B.black,minWidth:64,textAlign:"center"}}>Page {page} / {totalPages}</span><button onClick={()=>{const np=Math.min(totalPages,page+1);setPage(np);loadPage(np);}} disabled={page===totalPages} style={{padding:"5px 11px",background:B.white,color:page===totalPages?B.tone2:B.orange,border:"1px solid "+B.tone1,borderRadius:6,cursor:page===totalPages?"default":"pointer",fontSize:16,fontWeight:700,fontFamily:"Manrope,sans-serif"}}>&#8250;</button></div>}
         <button onClick={handleSave} style={{...btnPrimary}}>{saving?"Saving...":"Save"}</button>
         <button onClick={handleExportPDF} style={{...btnGhost,marginLeft:"auto"}}>{exporting?"Exporting...":"Export PDF"}</button>
+        <button onClick={()=>attachFileRef.current?.click()} disabled={attaching} style={btnGhost}>{attaching?"Attaching...":"Attach File"}</button>
+        <input ref={attachFileRef} type="file" style={{display:"none"}} onChange={e=>attachFile(e.target.files[0])}/>
       </div>
       {showClearConfirm&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:28,width:320,fontFamily:"Manrope,sans-serif"}}><h3 style={{margin:"0 0 12px",color:B.black,fontSize:16}}>Clear all markup?</h3><p style={{fontSize:13,color:B.black2,margin:"0 0 20px"}}>This will remove all markup on this page.</p><div style={{display:"flex",gap:8}}><button onClick={()=>setShowClearConfirm(false)} style={btnGhost}>Cancel</button><button onClick={async()=>{setShowClearConfirm(false);pathsRef.current=[];allMarkupsRef.current={...allMarkupsRef.current,[page]:[]};const c=markupRef.current;if(c){const ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);}await api.saveMarkups(drawing.id,[],page,markupRef.current?.width||0,markupRef.current?.height||0);}} style={{...btnPrimary,background:"#E24B4A"}}>Clear markup</button></div></div></div>)}
       {tool==="comment"&&!pendingPin&&<div style={{background:"#FEF3E8",borderBottom:"1px solid "+B.tone1,padding:"5px 16px",fontSize:12,color:B.orange,fontFamily:"Manrope,sans-serif"}}>Click anywhere on the drawing to place a comment pin.</div>}
