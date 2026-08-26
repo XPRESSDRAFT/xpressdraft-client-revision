@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from "reac
 import * as api from "./api";
 import DrawingView from "./DrawingView";
 import ContractorPortal from "./ContractorPortal";
+import Chat from "./Chat";
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
   tone1:"#D2CAC4",tone2:"#A9A09B",black1:"#42453C",
@@ -72,10 +73,7 @@ function VerifyPage({onLogin}){
   useEffect(()=>{
     const token=searchParams.get("token");
     if(!token){setStatus("error");return;}
-    api.verifyMagicLink(token).then(d=>{
-      localStorage.setItem("xpd_token",d.token);
-      onLogin(d.user);navigate("/");
-    }).catch(()=>setStatus("error"));
+    api.verifyMagicLink(token).then(d=>{localStorage.setItem("xpd_token",d.token);onLogin(d.user);navigate("/");}).catch(()=>setStatus("error"));
   },[]);
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
@@ -125,33 +123,26 @@ function ProjectsPage({user,onLogout}){
   const createProject=async()=>{
     if(!newName.trim())return;
     const d=await api.createProject({name:newName,description:newDesc,stage:newStage,clientId:newClientId||null,jobNumber:newJobNum,siteAddress:newAddress,contractorId:newContractorId||null,assignedTo:newAssignedTo||null});
-    setProjects([d.project,...projects]);
-    setShowNew(false);setNewName("");setNewDesc("");setNewJobNum("");setNewAddress("");
+    setProjects([d.project,...projects]);setShowNew(false);setNewName("");setNewDesc("");setNewJobNum("");setNewAddress("");
   };
   const handleUpload=async(projectId,files)=>{
-    for(const file of files){
-      if(!file.type.includes("pdf"))continue;
-      await api.uploadDrawing(projectId,file);
-    }
+    for(const file of files){if(!file.type.includes("pdf"))continue;await api.uploadDrawing(projectId,file);}
     const d=await api.getProjects();setProjects(d.projects);
   };
   const deleteProject=async(id)=>{
     if(!window.confirm("Delete this project?"))return;
-    await api.deleteProject(id);
-    setProjects(projects.filter(p=>p.id!==id));
+    await api.deleteProject(id);setProjects(projects.filter(p=>p.id!==id));
   };
   const deleteDrawing=async(projectId,drawingId,e)=>{
     e.stopPropagation();
     if(!window.confirm("Delete this drawing?"))return;
-    await api.deleteDrawing(projectId,drawingId);
-    const d=await api.getProjects();setProjects(d.projects);
+    await api.deleteDrawing(projectId,drawingId);const d=await api.getProjects();setProjects(d.projects);
   };
   const editProjectName=async(p)=>{
     const current=p.site_address||p.name;
     const newVal=prompt("Edit project name / site address:",current);
     if(!newVal||!newVal.trim()||newVal===current)return;
-    await api.updateProject(p.id,{siteAddress:newVal.trim()});
-    setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
+    await api.updateProject(p.id,{siteAddress:newVal.trim()});setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
   const toggleLock=async(p)=>{
     const willLock=!p.locked;
@@ -495,6 +486,7 @@ function ProjectDetail({project,user,onBack}){
   const [projectStatus,setProjectStatus]=useState(null);
   const [statusLoading,setStatusLoading]=useState(true);
   const [showDashboard,setShowDashboard]=useState(!project.skipDashboard);
+  const [showChat,setShowChat]=useState(false);
   useEffect(()=>{
     api.getDrawings(project.id).then(d=>{
       setDrawings(d.drawings);
@@ -535,7 +527,8 @@ function ProjectDetail({project,user,onBack}){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:32}}>{[{label:"Stage",value:statusLoading?"…":projectStatus?.stage||"Setup",bg:"#FEF3E8",color:B.orange,border:"1px solid "+B.tone1},{label:"Revision",value:statusLoading?"…":projectStatus?.revision||"—",bg:B.cream,color:B.black1,border:"1px solid "+B.tone1},{label:"Timeline",value:statusLoading?"…":projectStatus?.timeline||"STARTED",bg:"#EBF3FE",color:"#1A4A8A",border:"1px solid #C5DCF5"}].map((s,i)=>(<div key={i} style={{background:s.bg,border:s.border,borderRadius:12,padding:"20px 16px",textAlign:"center"}}><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.08em",marginBottom:8}}>{s.label.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.value}</div></div>))}</div>
           {(()=>{const step2=currentStep>=0?currentStep:0;return(<div style={{background:B.cream,borderRadius:12,padding:"20px 24px",marginBottom:32,border:"1px solid "+B.tone1}}><div style={{fontSize:11,color:B.black2,fontWeight:600,letterSpacing:"0.08em",marginBottom:16}}>PROJECT PROGRESS</div><div style={{display:"flex",alignItems:"center",overflowX:"auto"}}>{timelineSteps.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",flex:1,minWidth:0}}><div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}><div style={{width:12,height:12,borderRadius:"50%",background:i<step2?"#639922":i===step2?B.orange:B.tone1,border:i===step2?"2px solid "+B.orange:"none"}}/><div style={{fontSize:8,color:i<=step2?B.black:B.black2,marginTop:4,textAlign:"center",maxWidth:48,lineHeight:1.2}}>{s}</div></div>{i<timelineSteps.length-1&&<div style={{height:2,flex:1,background:i<step2?"#639922":B.tone1,marginBottom:16,minWidth:8}}/>}</div>))}</div></div>);})()}
           {!statusLoading&&!projectStatus?.stage&&(<div style={{background:B.cream,borderRadius:12,padding:"24px",marginBottom:32,border:"1px solid "+B.tone1,textAlign:"center"}}><p style={{color:B.black2,fontSize:14,lineHeight:1.8,margin:0}}>Your project is in the setup stage — our team is reviewing your brief, getting familiar with the site and preparing everything before we begin drafting.<br/><br/>You'll be notified as soon as your drawings are ready for review.</p></div>)}
-          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>{drawings.length>0&&!project.locked&&<button onClick={()=>setShowDashboard(false)} style={{...btnPrimary,fontSize:15,padding:"14px 32px"}}>Review my drawings →</button>}{project.locked&&project.stripe_payment_link&&<a href={project.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#8B2020",textDecoration:"none"}}>Pay to access plans →</a>}{drawings.length>0&&!project.locked&&<button onClick={async()=>{if(!window.confirm("Approve drawings?\n\nThis will send a confirmation to Xpress Draft to proceed to the final set."))return;try{await fetch((process.env.REACT_APP_API_URL||"")+"/api/monday/approve",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({projectId:project.id})});alert("Your approval has been sent.");}catch(e){alert("Error: "+e.message);}}} style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#2E5C10",border:"2px solid #639922"}}>Approve drawings ✓</button>}</div>
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>{drawings.length>0&&!project.locked&&<button onClick={()=>setShowDashboard(false)} style={{...btnPrimary,fontSize:15,padding:"14px 32px"}}>Review my drawings →</button>}{project.locked&&project.stripe_payment_link&&<a href={project.stripe_payment_link} target="_blank" rel="noreferrer" style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#8B2020",textDecoration:"none"}}>Pay to access plans →</a>}{drawings.length>0&&!project.locked&&<button onClick={async()=>{if(!window.confirm("Approve drawings?\n\nThis will send a confirmation to Xpress Draft to proceed to the final set."))return;try{await fetch((process.env.REACT_APP_API_URL||"")+"/api/monday/approve",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({projectId:project.id})});alert("Your approval has been sent.");}catch(e){alert("Error: "+e.message);}}} style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#2E5C10",border:"2px solid #639922"}}>Approve drawings ✓</button>}{projectStatus?.designerName&&<button onClick={()=>setShowChat(true)} style={{...btnPrimary,fontSize:15,padding:"14px 32px",background:"#378ADD"}}>Message your designer →</button>}</div>
+          {showChat&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:24,width:440,fontFamily:"Manrope,sans-serif"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><h3 style={{margin:0,fontSize:16,color:B.black}}>Messages</h3><span onClick={()=>setShowChat(false)} style={{cursor:"pointer",color:B.black2}}>✕</span></div><Chat fetchUrl={"/api/projects/"+project.id+"/messages"} apiBase={process.env.REACT_APP_API_URL||""} token={localStorage.getItem("xpd_token")} currentRole="client"/></div></div>}
         </div>
       </div>
     );
@@ -544,6 +537,7 @@ function ProjectDetail({project,user,onBack}){
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 20px",display:"flex",alignItems:"center",height:52,gap:12}}>
         <button onClick={()=>user.role==="client"?setShowDashboard(true):onBack()} style={{background:"none",border:"none",color:B.tone2,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>{user.role==="client"?"← Dashboard":"Projects"}</button>
+        {user.role==="admin"&&<button onClick={()=>setShowChat(true)} style={{background:"none",border:"1px solid #378ADD",color:"#378ADD",padding:"4px 10px",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"Manrope,sans-serif"}}>Messages</button>}
         <span style={{color:B.black2}}>|</span>
         <span style={{fontWeight:600,fontSize:14,color:B.cream}}>
           {project.job_number&&<span style={{color:B.orange,marginRight:8}}>{project.job_number}</span>}
@@ -558,6 +552,7 @@ function ProjectDetail({project,user,onBack}){
           </div>
         )}
       </nav>
+      {showChat&&user.role==="admin"&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:B.white,borderRadius:12,padding:24,width:440,fontFamily:"Manrope,sans-serif"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><h3 style={{margin:0,fontSize:16,color:B.black}}>Messages</h3><span onClick={()=>setShowChat(false)} style={{cursor:"pointer",color:B.black2}}>✕</span></div><Chat fetchUrl={"/api/projects/"+project.id+"/messages"} apiBase={process.env.REACT_APP_API_URL||""} token={localStorage.getItem("xpd_token")} currentRole="admin"/></div></div>}
       <div style={{display:"flex",height:"calc(100vh - 52px)",overflow:"hidden"}}>
         <div style={{width:180,background:B.white,borderRight:"1px solid "+B.tone1,overflowY:"auto"}}>
           <div style={{padding:"10px 12px",fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.06em"}}>DRAWINGS</div>
