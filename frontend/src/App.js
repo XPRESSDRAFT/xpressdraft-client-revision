@@ -153,7 +153,7 @@ function ProjectsPage({user,onLogout}){
     await api.updateProject(p.id,{siteAddress:newVal.trim()});
     setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
   };
-  const toggleLock=async(p)=>{ // toggles LOCKED/UNLOCKED, re-fetches to confirm it persisted
+  const toggleLock=async(p)=>{
     const willLock=!p.locked;
     const confirmMsg=willLock?"Lock "+(p.job_number||p.name)+"? The client will immediately lose access to their plans.":"Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment.";
     if(!window.confirm(confirmMsg))return;
@@ -168,7 +168,7 @@ function ProjectsPage({user,onLogout}){
     }catch(e){alert("Failed to update lock status: "+e.message);}
     setLockToggling(prev=>({...prev,[p.id]:false}));
   };
-  const syncContractorJobs=async()=>{ // backfills missing contractor_jobs rows
+  const syncContractorJobs=async()=>{
     if(!window.confirm("Scan all projects and create any missing contractor job records?"))return;
     setSyncingJobs(true);
     try{
@@ -252,7 +252,7 @@ function ProjectsPage({user,onLogout}){
           {user.role==="admin"&&<button onClick={syncContractorJobs} disabled={syncingJobs} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:syncingJobs?"default":"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",opacity:syncingJobs?0.6:1}}>{syncingJobs?"Syncing...":"Sync Contractor Jobs"}</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:user.role==="contractor"?"#378ADD":"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
-          <button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>
+          {user.role!=="client"&&<button onClick={onLogout} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Sign out</button>}
         </div>
       </nav>
       <div style={{maxWidth:900,margin:"0 auto",padding:"2rem 24px"}}>
@@ -395,6 +395,11 @@ function AdminPage({user,onBack}){
     try{await api.resendInvite(id);setMsg("Invite resent to "+name+".");}
     catch(e){setMsg("Failed to resend invite");}
   };
+  const toggleUserActive=async(u)=>{
+    const willSuspend=u.active!==false;
+    if(!window.confirm((willSuspend?"Suspend ":"Reactivate ")+u.name+"?"))return;
+    try{ const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+u.id,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({active:!willSuspend})}); if(!r.ok)throw new Error((await r.json()).error||"Failed"); setUsers(users.map(x=>x.id===u.id?{...x,active:!willSuspend}:x));setMsg(u.name+(willSuspend?" suspended.":" reactivated.")); }catch(e){setMsg("Failed: "+e.message);}
+  };
   const openEditUser=(u)=>{
     setEditingUser(u);
     setEditUserName(u.name||"");
@@ -405,14 +410,8 @@ function AdminPage({user,onBack}){
   const saveEditUser=async()=>{
     if(!editingUser)return;
     try{
-      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+editingUser.id,{
-        method:"PUT",
-        headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},
-        body:JSON.stringify({name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone})
-      });
-      setUsers(users.map(u=>u.id===editingUser.id?{...u,name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone}:u));
-      setEditingUser(null);
-      setMsg("User updated successfully.");
+      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+editingUser.id,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone})});
+      setUsers(users.map(u=>u.id===editingUser.id?{...u,name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone}:u));setEditingUser(null);setMsg("User updated successfully.");
     }catch(e){setMsg("Failed to update user");}
   };
   return(
@@ -452,17 +451,18 @@ function AdminPage({user,onBack}){
           </div>
         )}
         <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto",padding:"10px 16px",background:B.cream,borderBottom:"1px solid "+B.tone1,fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.05em"}}>
-            <span>NAME</span><span>EMAIL</span><span>ROLE</span><span></span><span></span><span></span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto auto",padding:"10px 16px",background:B.cream,borderBottom:"1px solid "+B.tone1,fontSize:11,fontWeight:600,color:B.black2,letterSpacing:"0.05em"}}>
+            <span>NAME</span><span>EMAIL</span><span>ROLE</span><span></span><span></span><span></span><span></span>
           </div>
           {loading&&<div style={{padding:24,textAlign:"center",color:B.black2}}>Loading...</div>}
           {users.map(u=>(
-            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto",padding:"12px 16px",borderBottom:"1px solid "+B.cream,alignItems:"center"}}>
-              <span style={{fontSize:14,fontWeight:500,color:B.black}}>{u.name}</span>
+            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto auto auto auto auto",padding:"12px 16px",borderBottom:"1px solid "+B.cream,alignItems:"center",opacity:u.active===false?0.55:1}}>
+              <span style={{fontSize:14,fontWeight:500,color:B.black}}>{u.name}{u.active===false&&<span style={{fontSize:10,marginLeft:8,padding:"2px 8px",borderRadius:20,background:"#FCEBEB",color:"#8B2020",fontWeight:700}}>SUSPENDED</span>}</span>
               <span style={{fontSize:13,color:B.black2}}>{u.email}</span>
               <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:u.role==="admin"?"#F0EEF8":u.role==="team"?"#FEF3E8":u.role==="contractor"?"#EBF3FE":"#EAF3DE",color:u.role==="admin"?"#3D3580":u.role==="team"?B.orange:u.role==="contractor"?"#1A4A8A":"#2E5C10",fontWeight:600,marginRight:8}}>{u.role}</span>
               <button onClick={()=>openEditUser(u)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Edit</button>
               <button onClick={()=>resendInvite(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6}}>Resend invite</button>
+              <button onClick={()=>toggleUserActive(u)} style={{...btnGhost,fontSize:11,padding:"4px 10px",marginRight:6,color:u.active===false?"#2E5C10":"#8B2020",borderColor:u.active===false?"#639922":"#F7C1C1"}}>{u.active===false?"Reactivate":"Suspend"}</button>
               <button onClick={()=>removeUser(u.id,u.name)} style={{...btnGhost,fontSize:11,padding:"4px 10px",color:"#8B2020",borderColor:"#F7C1C1"}}>Remove</button>
             </div>
           ))}
