@@ -107,32 +107,36 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
                 {pd.clientFiles.map((f,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:i<pd.clientFiles.length-1?"1px solid "+B.cream:"none"}}><span style={{fontSize:13,color:B.black1}}>{f.name}</span><a href={f.url} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.orange}}>Download →</a></div>))}
               </div>
             )}
-            {job.status==="pending"&&(
+            {job.status==="pending"&&(()=>{
+              const dealValue=parseFloat(pd?.dealValue)||0;
+              const fmt=(pct)=>"$"+Math.round(dealValue*pct/100).toLocaleString();
+              return (
               <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
                 <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 16px"}}>Consultant Fee</h3>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,padding:"10px 0",borderBottom:"1px solid "+B.cream}}>
                   <span style={{fontSize:13,color:B.black1}}>Base fee</span>
-                  <span style={{fontSize:14,fontWeight:600,color:B.black}}>25%</span>
+                  <span style={{fontSize:14,fontWeight:600,color:B.black}}>25% ({fmt(25)})</span>
                 </div>
                 {[["siteVisit","Site Visit",5],["model3d","3D Model",5],["renders3d","3D Renders",5]].map(([key,label,pct])=>(
                   <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,padding:"10px 0",borderBottom:"1px solid "+B.cream}}>
                     <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:13,color:B.black1}}>
                       <input type="checkbox" checked={fees[key]} onChange={e=>updateFee({...fees,[key]:e.target.checked})} style={{width:16,height:16}}/>
-                      {label} <span style={{fontSize:11,color:B.black2}}>(+{pct}%)</span>
+                      {label} <span style={{fontSize:11,color:B.black2}}>(+{pct}% / +{fmt(pct)})</span>
                     </label>
-                    <span style={{fontSize:13,fontWeight:500,color:fees[key]?B.orange:B.black2}}>{fees[key]?"+"+pct+"%":"—"}</span>
+                    <span style={{fontSize:13,fontWeight:500,color:fees[key]?B.orange:B.black2}}>{fees[key]?"+"+pct+"% / +"+fmt(pct):"—"}</span>
                   </div>
                 ))}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderTop:"2px solid "+B.tone1,marginTop:4}}>
                   <span style={{fontSize:14,fontWeight:700,color:B.black}}>Total Fee</span>
-                  <span style={{fontSize:20,fontWeight:700,color:B.orange}}>{totalFee}%</span>
+                  <span style={{fontSize:20,fontWeight:700,color:B.orange}}>{totalFee}% ({fmt(totalFee)})</span>
                 </div>
                 <div style={{display:"flex",gap:12,marginTop:16}}>
                   <button onClick={declineJob} style={{...btnGhost,flex:1,justifyContent:"center",color:"#8B2020",borderColor:"#F7C1C1"}}>Decline job</button>
-                  <button onClick={acceptJob} style={{...btnPrimary,flex:1,justifyContent:"center",background:"#2E5C10",border:"2px solid #639922"}}>Accept job ({totalFee}%)</button>
+                  <button onClick={acceptJob} style={{...btnPrimary,flex:1,justifyContent:"center",background:"#2E5C10",border:"2px solid #639922"}}>Accept job ({totalFee}% / {fmt(totalFee)})</button>
                 </div>
               </div>
-            )}
+              );
+            })()}
             {job.status==="accepted"&&(
               <div style={{background:"#EAF3DE",border:"1px solid #639922",borderRadius:10,padding:"1.25rem",marginBottom:16,textAlign:"center"}}>
                 <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee</p>
