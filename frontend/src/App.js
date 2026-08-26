@@ -119,8 +119,8 @@ function ProjectsPage({user,onLogout}){
     const loadProjects=()=>{api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});};
     loadProjects();
     let interval;if(user.role==="client"){interval=setInterval(loadProjects,30000);}
-    return()=>clearInterval(interval);
     if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
+    return()=>clearInterval(interval);
   },[]);
   const createProject=async()=>{
     if(!newName.trim())return;
