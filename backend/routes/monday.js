@@ -499,13 +499,12 @@ router.post('/approve', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-router.post('/submit-markup', auth, upload.fields([{ name: 'pdf', maxCount: 1 }, { name: 'reviewPdf', maxCount: 1 }]), async (req, res) => {
+router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
   console.log('SUBMIT MARKUP HIT');
   try {
     const { projectId, commentSummary, isVariation } = req.body;
     const variationRequested = isVariation === 'true';
-    const pdfBuffer = req.files?.pdf?.[0]?.buffer;
-    const reviewBuffer = req.files?.reviewPdf?.[0]?.buffer;
+    const pdfBuffer = req.file?.buffer;
     if (!pdfBuffer) return res.status(400).json({ error: 'PDF required' });
     const { data: project } = await supabase
       .from('projects')
@@ -516,23 +515,19 @@ router.post('/submit-markup', auth, upload.fields([{ name: 'pdf', maxCount: 1 },
     if (!project.monday_item_id) return res.json({ ok: true, message: 'No Monday item linked' });
     const clientName = project.client?.name || 'Client';
     const jobNumber = project.job_number || project.name;
+    const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
     const FormDataNode = require('form-data');
     const axios = require('axios');
-    const uploadOne = async (buffer, fileName, mimeType) => {
-      const mondayForm = new FormDataNode();
-      mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id } }`);
-      mondayForm.append('variables', JSON.stringify({ file: null }));
-      mondayForm.append('map', JSON.stringify({ file: ['variables.file'] }));
-      mondayForm.append('file', Buffer.from(buffer), { filename: fileName, contentType: mimeType, knownLength: buffer.length });
-      const uploadRes = await axios.post('https://api.monday.com/v2/file', mondayForm, {
-        headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...mondayForm.getHeaders() }
-      });
-      console.log('Monday file upload result:', JSON.stringify(uploadRes.data));
-    };
-    // Both files go to the same Instructions column — the review reads as a team writeup, never labeled as AI
-    await uploadOne(pdfBuffer, `${jobNumber}-Markup-${Date.now()}.pdf`, 'application/pdf');
-    if (reviewBuffer) await uploadOne(reviewBuffer, `${jobNumber}-Review-${Date.now()}.pdf`, 'application/pdf');
-    console.log(`Files uploaded to Monday for item ${project.monday_item_id}`);
+    const mondayForm = new FormDataNode();
+    mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id } }`);
+    mondayForm.append('variables', JSON.stringify({ file: null }));
+    mondayForm.append('map', JSON.stringify({ file: ['variables.file'] }));
+    mondayForm.append('file', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
+    const uploadRes = await axios.post('https://api.monday.com/v2/file', mondayForm, {
+      headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...mondayForm.getHeaders() }
+    });
+    console.log('Monday file upload result:', JSON.stringify(uploadRes.data));
+    console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
     const moveResult = await mondayApi(`mutation {
       move_item_to_group(
         item_id: ${project.monday_item_id},
@@ -557,7 +552,7 @@ router.post('/submit-markup', auth, upload.fields([{ name: 'pdf', maxCount: 1 },
       subject: `Client markup submitted — ${jobNumber}`,
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
         <h2 style="color:#2A2B29;">Client markup submitted</h2>
-        <p style="color:#5E635B;font-size:15px;line-height:1.8;"><strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>The marked-up PDF and review summary have been uploaded to Monday under the Instructions column.<br/><br/>The item has been moved to <strong>TO BE REVIEWED</strong>.</p>
+        <p style="color:#5E635B;font-size:15px;line-height:1.8;"><strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>The marked-up PDF has been uploaded to Monday under the Instructions column.<br/><br/>The item has been moved to <strong>TO BE REVIEWED</strong>.</p>
         ${commentSummary ? `<div style="background:#F3EAE5;padding:16px;border-radius:8px;margin-top:16px;border-left:3px solid #EA672F;"><p style="font-weight:600;color:#2A2B29;margin:0 0 8px;">Comments:</p><p style="color:#5E635B;font-size:13px;line-height:1.6;margin:0;">${commentSummary}</p></div>` : ''}
         <a href="https://xpressdraft.monday.com/boards/${process.env.MONDAY_BOARD_ID}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:24px;">View in Monday →</a>
       </div>`
