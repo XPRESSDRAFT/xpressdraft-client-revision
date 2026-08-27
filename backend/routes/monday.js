@@ -197,7 +197,7 @@ router.post('/webhook', async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item not found' });
     const cols = {};
     item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
-    const jobNumber = item.name;
+    const jobNumber = cols[COL.jobNumber] || item.name;
     const siteAddress = cols[COL.siteAddress] || '';
     const projectRef = siteAddress ? `${jobNumber} — ${siteAddress}` : jobNumber;
     const revisionLabel = (cols[COL.revision] || '').toUpperCase().trim();
