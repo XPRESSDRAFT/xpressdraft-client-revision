@@ -33,6 +33,9 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [improving,setImproving]=useState(false);
   const [interpreting,setInterpreting]=useState(null);
   const [retryCounts,setRetryCounts]=useState({});
+  const [pendingBatch,setPendingBatch]=useState([]);
+  const pendingBatchRef=useRef([]);
+  const [pendingIsVariation,setPendingIsVariation]=useState(false);
   const [saving,setSaving]=useState(false);
   const [approving,setApproving]=useState(false);
   const [approved,setApproved]=useState(false);
@@ -205,11 +208,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     setInterpreting(commentId);
     const c=comments.find(c=>c.id===commentId);
     const d=await api.interpretMarkup(drawing.id,commentId,c?.text);
-    setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft (AI)",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));
+    setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));
     setInterpreting(null);
   };
 
-  const rejectInterpretation=async(commentId)=>{const retries=retryCounts[commentId]||0;if(retries>=1){setComments(comments.map(c=>c.id===commentId?{...c,status:"escalated"}:c));return;}setRetryCounts(prev=>({...prev,[commentId]:retries+1}));setInterpreting(commentId);const c=comments.find(c=>c.id===commentId);const prevInterp=c?.replies?.filter(r=>r.is_ai_interpreted).map(r=>r.text).join(" | ")||"";const d=await api.interpretMarkup(drawing.id,commentId,c?.text+" [Previous attempt was rejected: "+prevInterp+"]");setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft (AI)",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));setInterpreting(null);};
+  const rejectInterpretation=async(commentId)=>{const retries=retryCounts[commentId]||0;if(retries>=1){setComments(comments.map(c=>c.id===commentId?{...c,status:"escalated"}:c));return;}setRetryCounts(prev=>({...prev,[commentId]:retries+1}));setInterpreting(commentId);const c=comments.find(c=>c.id===commentId);const prevInterp=c?.replies?.filter(r=>r.is_ai_interpreted).map(r=>r.text).join(" | ")||"";const d=await api.interpretMarkup(drawing.id,commentId,c?.text+" [Previous attempt was rejected: "+prevInterp+"]");setComments(comments.map(c=>c.id===commentId?{...c,status:"interpreted",replies:[...(c.replies||[]),{id:"ai"+Date.now(),text:d.interpretation,author:{name:"Xpress Draft",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:c));setInterpreting(null);};
 
   const confirmRevision=async(commentId)=>{
     try{
@@ -220,7 +223,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       const d=await api.confirmRevision(drawing.id,commentId);
       setComments(comments.map(c=>c.id===commentId?{...c,status:"confirmed"}:c));
       onRevisionConfirmed(d.revisionSummary);
-      alert("Revision confirmed. The Xpress Draft team has been notified.");
+      alert("Revision confirmed.");
     }catch(e){alert("Error: "+e.message);}
   };
 
@@ -307,12 +310,19 @@ const generateMarkupPdf=async()=>{
   // instead of waiting on PDF rendering + upload. If the background upload
   // fails, the client is alerted directly rather than the failure being
   // silently swallowed — the backend also emails admin in that case.
+  // Client submission no longer confirms revisions immediately. Instead,
+  // every open comment is automatically interpreted (invisibly — the
+  // client sees this as a team response, never as AI) and the client is
+  // asked to confirm each one is understood correctly. Only once every
+  // comment in this batch is resolved (confirmed or escalated) does the
+  // system deduct revisions, generate the markup + review PDFs, and send
+  // everything to Monday.
   const submitAllChanges=async()=>{
     if(project.locked){
       alert("Your changes are currently being reviewed by the Xpress Draft team. You will be notified when your updated drawings are ready.");
       return;
     }
-    const openComments=comments.filter(c=>c.status==="open"||c.status==="interpreted");
+    const openComments=comments.filter(c=>c.status==="open");
     if(openComments.length===0){alert("No pending comments to submit.");return;}
     const rs=revisionSummary;const nextRev=(rs?.used||0)+1;const total=rs?.totalAllowed||2;
     const stage=rs?.stageLabel==="PR"?"Preliminary":"Working Drawings";
@@ -325,26 +335,69 @@ const generateMarkupPdf=async()=>{
       const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nProceed?");
       if(!confirmed)return;
     }
-    let lastSummary=rs;
+    const batchIds=openComments.map(c=>c.id);
+    pendingBatchRef.current=batchIds;setPendingBatch(batchIds);setPendingIsVariation(isVariation);
     for(const c of openComments){
-      try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
+      try{
+        const d=await api.interpretMarkup(drawing.id,c.id,c.text);
+        setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"interpreted",replies:[...(x.replies||[]),{id:"ai"+Date.now()+Math.random(),text:d.interpretation,author:{name:"Xpress Draft",role:"team"},is_ai_interpreted:true,created_at:new Date().toISOString()}]}:x));
+      }catch(e){console.error("Auto-interpret error:",e);}
     }
-    if(lastSummary)onRevisionConfirmed(lastSummary);
-    alert("All changes submitted. The Xpress Draft team will review and respond shortly."+(isVariation?" A variation fee applies to this revision — our team will be in touch with the cost.":""));
-    // PDF generation + Monday upload continues in the background from here.
+    alert("Thanks — we've reviewed your request. Please confirm below that we understood everything correctly before we proceed.");
+  };
+
+  // Fires once every comment in the current submission batch has been
+  // resolved by the client (confirmed or escalated) — generates both the
+  // markup PDF and a review-summary PDF, then sends both to Monday.
+  const finalizeSubmission=async()=>{
+    const batchIds=pendingBatchRef.current;
+    pendingBatchRef.current=[];setPendingBatch([]);
     try{
       const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
-      const fd=new FormData();fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);fd.append("projectId",project.id);fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));fd.append("isVariation",isVariation?"true":"false");
+      const {jsPDF}=window.jspdf;
+      const reviewPdf=new jsPDF({unit:"pt"});
+      reviewPdf.setFontSize(16);reviewPdf.setTextColor(42,43,41);reviewPdf.text("Review Summary",40,40);
+      let ry=64;
+      batchIds.forEach(id=>{
+        const c=comments.find(x=>x.id===id);
+        if(!c||c.status==="escalated")return;
+        const interp=(c.replies||[]).filter(r=>r.is_ai_interpreted).slice(-1)[0];
+        if(ry>700){reviewPdf.addPage();ry=40;}
+        reviewPdf.setFontSize(11);reviewPdf.setTextColor(226,75,74);reviewPdf.text("Client request:",40,ry);
+        reviewPdf.setTextColor(42,43,41);reviewPdf.setFontSize(10);
+        const reqLines=reviewPdf.splitTextToSize(c.text,500);reviewPdf.text(reqLines,40,ry+13);ry+=13+(reqLines.length*12)+8;
+        if(interp){
+          reviewPdf.setFontSize(11);reviewPdf.setTextColor(56,138,221);reviewPdf.text("Our understanding:",40,ry);
+          reviewPdf.setTextColor(42,43,41);reviewPdf.setFontSize(10);
+          const aLines=reviewPdf.splitTextToSize(interp.text,500);reviewPdf.text(aLines,40,ry+13);ry+=13+(aLines.length*12)+16;
+        }
+      });
+      const fd=new FormData();
+      fd.append("pdf",submitPdf.output("blob"),`${project.job_number||"markup"}.pdf`);
+      fd.append("reviewPdf",reviewPdf.output("blob"),`${project.job_number||"markup"}-Review.pdf`);
+      fd.append("projectId",project.id);
+      fd.append("commentSummary",submitPins.map((cc,i)=>`Pin ${i+1}: ${cc.text}`).join(" | "));
+      fd.append("isVariation",pendingIsVariation?"true":"false");
       const submitRes=await fetch(`${process.env.REACT_APP_API_URL||""}/api/monday/submit-markup`,{method:"POST",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:fd});
       if(!submitRes.ok){
         const errData=await submitRes.json().catch(()=>({}));
         throw new Error(errData.error||"Upload failed");
       }
+      alert("All changes submitted. The Xpress Draft team will review and respond shortly."+(pendingIsVariation?" A variation fee applies to this revision — our team will be in touch with the cost.":""));
     }catch(e){
-      console.error("PDF upload error:",e.message,e.stack);
+      console.error("Finalize submission error:",e.message,e.stack);
       alert("Your comments were saved, but sending the marked-up drawing to Xpress Draft failed. Please contact info@xpressdraft.com.au so we can check this manually — your revision is still recorded.");
     }
   };
+
+  useEffect(()=>{
+    if(pendingBatch.length===0)return;
+    const allResolved=pendingBatch.every(id=>{
+      const c=comments.find(x=>x.id===id);
+      return c&&(c.status==="confirmed"||c.status==="escalated");
+    });
+    if(allResolved)finalizeSubmission();
+  },[comments]);
 
   const COLORS=["#EA672F","#E24B4A","#378ADD","#639922","#7F77DD","#2A2B29","#CC0000","#006600","#006600"];
   const CTYPES={issue:{label:"Issue",bg:"#FCEBEB",color:"#8B2020",dot:"#E24B4A"},info:{label:"Question",bg:"#EBF3FE",color:"#1A4A8A",dot:"#378ADD"}};
@@ -454,7 +507,7 @@ const generateMarkupPdf=async()=>{
                   </div>
                   {(c.replies||[]).map(r=>(
                     <div key={r.id} style={{marginLeft:12,marginTop:5,padding:"8px 10px",background:r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor"?"#FEF3E8":B.white,border:"1px solid "+(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor"?B.orange:B.tone1),borderRadius:7,borderLeft:"3px solid "+(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor"?B.orange:B.tone2)}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:11,fontWeight:600,color:(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor")?B.orange:B.black}}>{r.author?.role==="contractor"?"Xpress Draft":r.author?.name}</span>{r.is_ai_interpreted&&<span style={{fontSize:9,background:B.orange,color:"#fff",borderRadius:4,padding:"1px 5px"}}>AI interpreted</span>}{(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor")&&!r.is_ai_interpreted&&<span style={{fontSize:9,background:B.orange,color:"#fff",borderRadius:4,padding:"1px 5px"}}>XD Team</span>}{r.is_private&&<span style={{fontSize:9,background:"#444",color:"#fff",borderRadius:4,padding:"1px 5px"}}>Private</span>}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:11,fontWeight:600,color:(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor")?B.orange:B.black}}>{r.author?.role==="contractor"?"Xpress Draft":r.author?.name}</span>{(r.author?.role==="team"||r.author?.role==="admin"||r.author?.role==="contractor")&&<span style={{fontSize:9,background:B.orange,color:"#fff",borderRadius:4,padding:"1px 5px"}}>XD Team</span>}{isTeam&&r.is_ai_interpreted&&<span style={{fontSize:9,background:"#7F77DD",color:"#fff",borderRadius:4,padding:"1px 5px"}}>AI</span>}{r.is_private&&<span style={{fontSize:9,background:"#444",color:"#fff",borderRadius:4,padding:"1px 5px"}}>Private</span>}</div>
                       <p style={{fontSize:12,color:B.black1,margin:0,lineHeight:1.5}}>{r.text}</p>
                     </div>
                   ))}
@@ -468,8 +521,8 @@ const generateMarkupPdf=async()=>{
                       </div>
                     </div>
                   )}
-                  {isSelected&&user.role!=="admin"&&user.role!=="team"&&user.role!=="contractor"&&c.status==="escalated"&&(<div style={{marginLeft:12,marginTop:8,padding:12,background:"#FCEBEB",border:"1px solid #E24B4A",borderRadius:8}}><p style={{fontSize:12,color:"#8B2020",margin:"0 0 6px",fontWeight:600}}>We need to discuss this with you</p><p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>Our AI could not interpret your request correctly. Please contact us directly.</p><a href="mailto:info@xpressdraft.com.au" style={{...btnPrimary,textDecoration:"none",fontSize:11}}>Contact Xpress Draft</a></div>)}
-                  {isSelected&&isTeam&&c.status==="open"&&(
+                  {isSelected&&user.role!=="admin"&&user.role!=="team"&&user.role!=="contractor"&&c.status==="escalated"&&(<div style={{marginLeft:12,marginTop:8,padding:12,background:"#FCEBEB",border:"1px solid #E24B4A",borderRadius:8}}><p style={{fontSize:12,color:"#8B2020",margin:"0 0 6px",fontWeight:600}}>We need to discuss this with you</p><p style={{fontSize:11,color:B.black2,margin:"0 0 10px",lineHeight:1.5}}>We want to make sure we get this exactly right — please contact us directly so we can confirm the details.</p><a href="mailto:info@xpressdraft.com.au" style={{...btnPrimary,textDecoration:"none",fontSize:11}}>Contact Xpress Draft</a></div>)}
+                  {isSelected&&isTeam&&c.status==="open"&&c.author?.role!=="client"&&(
                     <div style={{marginLeft:12,marginTop:6}}>
                       <button onClick={()=>interpret(c.id)} disabled={interpreting===c.id} style={{...btnPrimary,width:"100%",justifyContent:"center",marginBottom:6}}>
                         {interpreting===c.id?"Interpreting...":"Interpret with AI"}
@@ -506,10 +559,13 @@ const generateMarkupPdf=async()=>{
               ))}
             </div>
             <button onClick={addComment} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"10px",marginBottom:8}}>Done</button>
-            {comments.filter(c=>(c.page||1)===page&&c.status!=="confirmed").length>0&&(
+            {comments.filter(c=>(c.page||1)===page&&c.status==="open").length>0&&pendingBatch.length===0&&(
               <button onClick={submitAllChanges} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",background:B.black}}>
                 Submit all changes
               </button>
+            )}
+            {pendingBatch.length>0&&(
+              <div style={{textAlign:"center",fontSize:12,color:B.black2,padding:"10px 0"}}>Please confirm the response(s) above before submitting further changes.</div>
             )}
             {user.role==="client"&&!approved&&(
               <button onClick={handleApprove} disabled={approving} style={{...btnPrimary,width:"100%",justifyContent:"center",fontSize:14,padding:"12px",marginTop:8,background:"#2E5C10",border:"2px solid #639922"}}>
