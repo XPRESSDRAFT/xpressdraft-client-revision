@@ -109,6 +109,7 @@ function ProjectsPage({user,onLogout}){
   const [editClientId,setEditClientId]=useState("");
   const [editContractorId,setEditContractorId]=useState("");
   const [editAssignedTo,setEditAssignedTo]=useState("");
+  const [editNoFreeRevisions,setEditNoFreeRevisions]=useState(false);
   const [projectStatuses,setProjectStatuses]=useState({});
   const [lockToggling,setLockToggling]=useState({});
   const [syncingJobs,setSyncingJobs]=useState(false);
@@ -179,13 +180,15 @@ function ProjectsPage({user,onLogout}){
     setEditClientId(p.client_id||"");
     setEditContractorId(p.contractor_id||"");
     setEditAssignedTo(p.assigned_to||"");
+    setEditNoFreeRevisions(!!p.no_free_revisions);
   };
   const saveEdit=async()=>{
     if(!editingProject)return;
     await api.updateProject(editingProject.id,{
       name:editName,siteAddress:editAddress,jobNumber:editJobNum,
       stage:editStage,clientId:editClientId||null,
-      contractorId:editContractorId||null,assignedTo:editAssignedTo||null
+      contractorId:editContractorId||null,assignedTo:editAssignedTo||null,
+      noFreeRevisions:editNoFreeRevisions
     });
     const d=await api.getProjects();setProjects(d.projects);
     setEditingProject(null);
@@ -228,6 +231,7 @@ function ProjectsPage({user,onLogout}){
                 {contractors.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             )}
+            <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:B.black1,marginBottom:16,cursor:"pointer",padding:"8px 10px",background:editNoFreeRevisions?"#FCEBEB":B.cream,borderRadius:7,border:"1px solid "+(editNoFreeRevisions?"#F7C1C1":B.tone1)}}><input type="checkbox" checked={editNoFreeRevisions} onChange={e=>setEditNoFreeRevisions(e.target.checked)}/> No free revisions — every future revision requires a variation fee</label>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setEditingProject(null)} style={btnGhost}>Cancel</button>
               <button onClick={saveEdit} style={btnPrimary}>Save changes</button>
