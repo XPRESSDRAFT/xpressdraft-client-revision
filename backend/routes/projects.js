@@ -156,7 +156,7 @@ router.put('/:id', auth, async (req, res) => {
     if (req.user.role !== 'admin' && req.user.role !== 'team') {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo, noFreeRevisions } = req.body;
+    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo, noFreeRevisions, locked, stripePaymentLink } = req.body;
 
     // Grab the current contractor_id before overwriting it, so we know
     // whether this update is actually assigning a *new* contractor.
@@ -174,6 +174,8 @@ router.put('/:id', auth, async (req, res) => {
     if (contractorId !== undefined) updates.contractor_id = contractorId;
     if (assignedTo !== undefined) updates.assigned_to = assignedTo;
     if (noFreeRevisions !== undefined) updates.no_free_revisions = noFreeRevisions;
+    if (locked !== undefined) updates.locked = locked;
+    if (stripePaymentLink !== undefined) updates.stripe_payment_link = stripePaymentLink;
 
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
