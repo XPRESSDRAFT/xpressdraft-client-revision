@@ -25,7 +25,7 @@ router.get('/', auth, async (req, res) => {
 
     const projects = data.map(p => ({
       ...p,
-      revisionSummary: buildRevisionSummary(p.stage, p.revisions || [])
+      revisionSummary: buildRevisionSummary(p.stage, p.revisions || [], p.no_free_revisions)
     }));
 
     res.json({ projects });
@@ -145,7 +145,7 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     const stageRevisions = (data.revisions || []).filter(r => r.stage === data.stage);
-    res.json({ project: { ...data, revisionSummary: buildRevisionSummary(data.stage, stageRevisions) } });
+    res.json({ project: { ...data, revisionSummary: buildRevisionSummary(data.stage, stageRevisions, data.no_free_revisions) } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch project' });
   }
@@ -156,7 +156,7 @@ router.put('/:id', auth, async (req, res) => {
     if (req.user.role !== 'admin' && req.user.role !== 'team') {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo } = req.body;
+    const { name, description, stage, clientId, jobNumber, siteAddress, contractorId, assignedTo, noFreeRevisions } = req.body;
 
     // Grab the current contractor_id before overwriting it, so we know
     // whether this update is actually assigning a *new* contractor.
@@ -173,6 +173,7 @@ router.put('/:id', auth, async (req, res) => {
     if (siteAddress !== undefined) updates.site_address = siteAddress;
     if (contractorId !== undefined) updates.contractor_id = contractorId;
     if (assignedTo !== undefined) updates.assigned_to = assignedTo;
+    if (noFreeRevisions !== undefined) updates.no_free_revisions = noFreeRevisions;
 
     const { data, error } = await supabase
       .from('projects').update(updates).eq('id', req.params.id)
@@ -273,17 +274,21 @@ async function ensureContractorJob(projectId, contractorId) {
   }
 }
 
-function buildRevisionSummary(stage, revisions) {
+function buildRevisionSummary(stage, revisions, noFreeRevisions) {
   const freeAllowed = stage === 'preliminary' ? 2 : 1;
   const stageLabel = stage === 'preliminary' ? 'PR' : 'WD';
   const bonusGranted = revisions.filter(r => r.is_bonus).length;
   const used = revisions.filter(r => !r.is_bonus).length;
-  const totalAllowed = freeAllowed + bonusGranted;
+  // Manually locked out — every revision from here on is treated as
+  // beyond allowance, regardless of the portal's own count. Used for
+  // legacy projects that already exceeded their real-world free
+  // revisions before ever entering the portal.
+  const totalAllowed = noFreeRevisions ? 0 : freeAllowed + bonusGranted;
   return {
-    stage, stageLabel, used, freeAllowed, bonusGranted, totalAllowed,
+    stage, stageLabel, used, freeAllowed, bonusGranted, totalAllowed, noFreeRevisions: !!noFreeRevisions,
     remaining: Math.max(0, totalAllowed - used),
-    overAllowance: used > totalAllowed,
-    displayText: `${stageLabel}: ${used} of ${totalAllowed}`
+    overAllowance: noFreeRevisions || used > totalAllowed,
+    displayText: noFreeRevisions ? `${stageLabel}: No free revisions` : `${stageLabel}: ${used} of ${totalAllowed}`
   };
 }
 
