@@ -214,9 +214,14 @@ router.post('/webhook', async (req, res) => {
       .select('*, client:users!projects_client_id_fkey(id, name, email)')
       .eq('job_number', jobNumber)
       .single();
-    if (!project || !project.client) {
-      console.error(`No project/client found for job: ${jobNumber}`);
-      await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: No project or client found for job number "${jobNumber}". Please check the portal.`);
+    if (!project) {
+      console.error(`No project found for job: ${jobNumber}`);
+      await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: No project found for job number "${jobNumber}". Check that the Job Number column matches the portal exactly.`);
+      return res.json({ ok: true });
+    }
+    if (!project.client) {
+      console.error(`Project found but no client linked for job: ${jobNumber}`);
+      await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: Project "${jobNumber}" was found, but has no client assigned in the portal. Please assign a client via Edit Project before delivering.`);
       return res.json({ ok: true });
     }
     const { name: clientName, email: clientEmail } = project.client;
