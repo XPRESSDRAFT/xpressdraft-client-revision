@@ -6,7 +6,7 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const { auth } = require('../middleware/auth');
 const resend = new Resend(process.env.RESEND_API_KEY);
-const { sendAdminSms } = require('../utils/sms');
+const { sendAdminSms, sendClientSms } = require('../utils/sms');
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
   deliveryFile:   'file_mm67ta3v',
@@ -35,13 +35,7 @@ async function mondayApi(query) {
   return res.json();
 }
 async function getMondayItem(itemId) {
-  const data = await mondayApi(`{
-    items(ids: [${itemId}]) {
-      id name
-      column_values { id text value }
-      board { id }
-    }
-  }`);
+  const data = await mondayApi(`{ items(ids: [${itemId}]) { id name column_values { id text value } board { id } } }`);
   console.log('Monday API response:', JSON.stringify(data?.data?.items?.length), 'error:', JSON.stringify(data?.errors));
   return data?.data?.items?.[0];
 }
@@ -211,7 +205,7 @@ router.post('/webhook', async (req, res) => {
     console.log(`Job: ${jobNumber}, Stage: ${stageLabel}, Revision: ${revisionLabel}, isWD: ${isWD}, isFirstIssue: ${isFirstIssue}`);
     const { data: project } = await supabase
       .from('projects')
-      .select('*, client:users!projects_client_id_fkey(id, name, email)')
+      .select('*, client:users!projects_client_id_fkey(id, name, email, phone)')
       .eq('job_number', jobNumber)
       .single();
     if (!project) {
@@ -225,12 +219,10 @@ router.post('/webhook', async (req, res) => {
       return res.json({ ok: true });
     }
     const { name: clientName, email: clientEmail } = project.client;
-    // Safeguard: don't re-require payment if already paid for this stage, even if Revision label still reads first-issue
     const paymentDeliveryTypes = isWD ? ['wd_final_payment', 'wd_first_payment'] : ['pr_first_payment'];
     const { data: priorPaymentDeliveries } = await supabase.from('deliveries').select('id').eq('project_id', project.id).in('delivery_type', paymentDeliveryTypes).limit(1);
     const alreadyPaidForStage = (priorPaymentDeliveries || []).length > 0;
     if (alreadyPaidForStage && isFirstIssue) await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: Job "${jobNumber}" was delivered as if first issue, but payment already occurred for this stage. Delivered free instead — check the Revision column.`);
-    // Link contractor if assigned in Monday
     try {
       const contractor = await getContractorFromProject(pulseId);
       if (contractor && contractor.email) {
@@ -364,6 +356,10 @@ router.post('/webhook', async (req, res) => {
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     }
     await sendEmail(clientEmail, emailSubject, emailHtml);
+    const smsMessage = effectiveFirstIssue
+      ? `Hi ${clientName}, we are pleased to advise that your drawings are ready to be collected. You should have received an email by now. Should you have any questions, please dont hesitate to contact us. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.`
+      : isWD ? `Hi ${clientName}, your updated plans were just emailed to you. If you need anything else, please let us know. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.` : `Hi ${clientName}, your updated plans were just emailed to you. Looking forward to your feedback with further comments or your approval to proceed to the final drawings. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.`;
+    await sendClientSms(project.client?.phone, smsMessage);
     await supabase.from('deliveries').insert({
       project_id: project.id,
       monday_item_id: String(pulseId),
