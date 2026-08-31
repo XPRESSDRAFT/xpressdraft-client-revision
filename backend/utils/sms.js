@@ -4,7 +4,7 @@ async function sendTwilioSms(toPhone, message) {
     return;
   }
   const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-  const body = new URLSearchParams({ To: toPhone, From: process.env.TWILIO_FROM_NUMBER, Body: message.slice(0, 300) });
+  const body = new URLSearchParams({ To: toPhone, From: process.env.TWILIO_FROM_NUMBER, Body: message.slice(0, 1500) });
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
       method: 'POST',
