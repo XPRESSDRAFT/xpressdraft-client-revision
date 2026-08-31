@@ -135,8 +135,7 @@ function ProjectsPage({user,onLogout}){
     await api.deleteProject(id);setProjects(projects.filter(p=>p.id!==id));
   };
   const deleteDrawing=async(projectId,drawingId,e)=>{
-    e.stopPropagation();
-    if(!window.confirm("Delete this drawing?"))return;
+    e.stopPropagation();if(!window.confirm("Delete this drawing?"))return;
     await api.deleteDrawing(projectId,drawingId);const d=await api.getProjects();setProjects(d.projects);
   };
   const editProjectName=async(p)=>{
@@ -361,6 +360,7 @@ function AdminPage({user,onBack}){
   const [showAdd,setShowAdd]=useState(false);
   const [newName,setNewName]=useState("");
   const [newEmail,setNewEmail]=useState("");
+  const [newPhone,setNewPhone]=useState("");
   const [newRole,setNewRole]=useState("client");
   const [sendInvite,setSendInvite]=useState(true);
   const [msg,setMsg]=useState("");
@@ -372,18 +372,16 @@ function AdminPage({user,onBack}){
   useEffect(()=>{api.getUsers().then(d=>{setUsers(d.users);setLoading(false);});},[]);
   const addUser=async()=>{
     if(!newName.trim()||!newEmail.trim())return;
+    if(newRole==="client"&&!newPhone.trim()){setMsg("Phone number is required for client accounts.");return;}
     try{
-      const d=await api.createUser({name:newName,email:newEmail,role:newRole,sendInvite});
-      setUsers([...users,d.user]);
-      setMsg(sendInvite?"Added and invite sent.":"User added.");
-      setShowAdd(false);setNewName("");setNewEmail("");
+      const d=await api.createUser({name:newName,email:newEmail,phone:newPhone,role:newRole,sendInvite});
+      setUsers([...users,d.user]);setMsg(sendInvite?"Added and invite sent.":"User added.");setShowAdd(false);setNewName("");setNewEmail("");setNewPhone("");
     }catch(e){setMsg("Error: "+e.message);}
   };
   const removeUser=async(id,name)=>{
     if(!window.confirm("Remove "+name+"?"))return;
     try{
-      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+id,{method:"DELETE",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}});
-      setUsers(users.filter(u=>u.id!==id));setMsg(name+" removed.");
+      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+id,{method:"DELETE",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}});setUsers(users.filter(u=>u.id!==id));setMsg(name+" removed.");
     }catch(e){setMsg("Failed to remove user");}
   };
   const resendInvite=async(id,name)=>{
@@ -404,10 +402,12 @@ function AdminPage({user,onBack}){
   };
   const saveEditUser=async()=>{
     if(!editingUser)return;
+    if(editUserRole==="client"&&!editUserPhone.trim()){setMsg("Phone number is required for client accounts.");return;}
     try{
-      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+editingUser.id,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone})});
+      const r=await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+editingUser.id,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:"Bearer "+localStorage.getItem("xpd_token")},body:JSON.stringify({name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone})});
+      if(!r.ok)throw new Error((await r.json()).error||"Failed to update user");
       setUsers(users.map(u=>u.id===editingUser.id?{...u,name:editUserName,email:editUserEmail,role:editUserRole,phone:editUserPhone}:u));setEditingUser(null);setMsg("User updated successfully.");
-    }catch(e){setMsg("Failed to update user");}
+    }catch(e){setMsg(e.message);}
   };
   return(
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
@@ -430,6 +430,7 @@ function AdminPage({user,onBack}){
               <input style={inputSt} placeholder="Full name" value={newName} onChange={e=>setNewName(e.target.value)}/>
               <input style={inputSt} placeholder="Email address" value={newEmail} onChange={e=>setNewEmail(e.target.value)}/>
             </div>
+            <input style={{...inputSt,marginBottom:8}} placeholder={newRole==="client"?"Phone number (required for clients)":"Phone number"} value={newPhone} onChange={e=>setNewPhone(e.target.value)}/>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
               {[["client","Client"],["team","Team"],["contractor","Contractor"],["admin","Admin"]].map(([v,l])=>(
                 <div key={v} onClick={()=>setNewRole(v)} style={{padding:"6px 14px",borderRadius:6,border:"1px solid "+(newRole===v?B.orange:B.tone1),background:newRole===v?"#FEF3E8":B.white,color:newRole===v?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:newRole===v?600:400}}>{l}</div>
