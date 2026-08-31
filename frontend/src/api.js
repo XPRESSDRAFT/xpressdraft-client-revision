@@ -56,14 +56,29 @@ export const grantBonusRevision = (id) =>
 export const getDrawings = (projectId) =>
   fetch(`${API}/api/projects/${projectId}/drawings`, { headers: headers() }).then(handle);
 
-export const uploadDrawing = (projectId, file) => {
-  const form = new FormData();
-  form.append('pdf', file);
-  return fetch(`${API}/api/projects/${projectId}/drawings`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: form,
-  }).then(handle);
+// Uses XMLHttpRequest instead of fetch specifically because fetch has no
+// way to report upload progress — XHR's upload.onprogress event is the
+// only way to show a real percentage while a large file is sending.
+// onProgress is optional; existing callers that don't pass it still work.
+export const uploadDrawing = (projectId, file, onProgress) => {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('pdf', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/api/projects/${projectId}/drawings`);
+    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || 'Upload failed'));
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(form);
+  });
 };
 
 export const deleteDrawing = (projectId, drawingId) =>
