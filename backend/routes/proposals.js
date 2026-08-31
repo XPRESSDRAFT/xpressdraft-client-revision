@@ -204,7 +204,7 @@ router.post('/webhook', async (req, res) => {
         <p style="color:#A9A09B;font-size:13px;margin-top:32px;">The Xpress Draft Team</p>
       </div>`
     });
-    await sendClientSms(user.phone, `Hi ${clientName}, congratulations on choosing Xpressdraft! By now, you should have received 2 emails: pre-consultation form and the client portal login access. Please do your best with the pre-consultation as that will help us better progress with your First sketch. Once this is done, you will receive a text message advising you that your drawings are ready to be collected over the portal. From here, our design team will look after your project directly — for anything you need, reach Luiz Braga on 0466 515 532 or luiz.braga@xpressdraft.com.au. All the best!`);
+    await sendClientSms(user.phone, `Hi ${clientName}, congrats on choosing Xpressdraft! Check your email for the pre-consultation form and portal access - please complete it well, it helps your first sketch. We'll text when drawings are ready. From now, contact Luiz Braga (design team) on 0466 515 532 or luiz.braga@xpressdraft.com.au. All the best!`);
     console.log(`Welcome email sent to ${clientEmail} for ${projectRef}`);
     res.json({ ok: true });
   } catch (err) {
