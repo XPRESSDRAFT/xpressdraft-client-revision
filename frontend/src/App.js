@@ -114,6 +114,7 @@ function ProjectsPage({user,onLogout}){
   const [projectStatuses,setProjectStatuses]=useState({});
   const [lockToggling,setLockToggling]=useState({});
   const [uploadingId,setUploadingId]=useState(null);
+  const [uploadPct,setUploadPct]=useState(0);
   const [syncingJobs,setSyncingJobs]=useState(false);
   const fileRefs=useRef({});
   const refreshUserLists=()=>{if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}};
@@ -132,12 +133,12 @@ function ProjectsPage({user,onLogout}){
   const handleUpload=async(projectId,files)=>{
     const pdfFiles=files.filter(f=>f.type.includes("pdf"));
     if(pdfFiles.length===0)return;
-    setUploadingId(projectId);
+    setUploadingId(projectId);setUploadPct(0);
     try{
-      for(const file of pdfFiles){await api.uploadDrawing(projectId,file);}
+      for(const file of pdfFiles){await api.uploadDrawing(projectId,file,pct=>setUploadPct(pct));}
       const d=await api.getProjects();setProjects(d.projects);
     }catch(e){alert("Upload failed: "+(e.message||"Unknown error. Check the file size and try again."));}
-    setUploadingId(null);
+    setUploadingId(null);setUploadPct(0);
   };
   const deleteProject=async(id)=>{
     if(!window.confirm("Delete this project?"))return;
@@ -336,7 +337,7 @@ function ProjectsPage({user,onLogout}){
                       </div>
                     </div>
                     <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                      {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} disabled={uploadingId===p.id} style={{...btnGhost,opacity:uploadingId===p.id?0.6:1,cursor:uploadingId===p.id?"default":"pointer"}}>{uploadingId===p.id?"Uploading...":"Upload PDF"}</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{user.role==="admin"&&<button onClick={()=>toggleLock(p)} disabled={!!lockToggling[p.id]} style={{...btnGhost,color:p.locked?"#8B2020":"#639922",borderColor:p.locked?"#8B2020":"#639922",opacity:lockToggling[p.id]?0.6:1,cursor:lockToggling[p.id]?"default":"pointer",fontWeight:600,minWidth:78,justifyContent:"center"}}>{lockToggling[p.id]?"…":p.locked?"LOCKED":"UNLOCKED"}</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
+                      {isTeam&&(<><button onClick={()=>fileRefs.current[p.id]?.click()} disabled={uploadingId===p.id} style={{...btnGhost,opacity:uploadingId===p.id?0.6:1,cursor:uploadingId===p.id?"default":"pointer",minWidth:uploadingId===p.id?110:undefined,justifyContent:"center"}}>{uploadingId===p.id?"Uploading... "+uploadPct+"%":"Upload PDF"}</button><input ref={el=>fileRefs.current[p.id]=el} type="file" accept=".pdf" multiple style={{display:"none"}} onChange={e=>handleUpload(p.id,Array.from(e.target.files))}/>{user.role==="admin"&&<button onClick={()=>toggleLock(p)} disabled={!!lockToggling[p.id]} style={{...btnGhost,color:p.locked?"#8B2020":"#639922",borderColor:p.locked?"#8B2020":"#639922",opacity:lockToggling[p.id]?0.6:1,cursor:lockToggling[p.id]?"default":"pointer",fontWeight:600,minWidth:78,justifyContent:"center"}}>{lockToggling[p.id]?"…":p.locked?"LOCKED":"UNLOCKED"}</button>}<button onClick={()=>deleteProject(p.id)} style={{...btnGhost,color:"#8B2020",borderColor:"#F7C1C1"}}>Delete</button></>)}
                       {(p.drawings?.length||0)>0&&(p.locked&&user.role==='client'?<a href={p.stripe_payment_link||'#'} target="_blank" rel="noreferrer" style={{...btnPrimary,background:"#8B2020",textDecoration:"none"}}>{p.stripe_payment_link?"Pay to access plans":"Payment pending"}</a>:<button onClick={()=>setActiveProject(p)} style={btnPrimary}>Open</button>)}
                     </div>
                   </div>
