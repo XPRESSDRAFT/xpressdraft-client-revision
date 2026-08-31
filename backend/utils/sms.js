@@ -1,19 +1,11 @@
-// Sends a short SMS alert to the admin phone via Twilio's REST API.
-// Silently does nothing if Twilio env vars aren't set, so this is safe
-// to call from anywhere without breaking the calling route if SMS isn't
-// configured yet.
-async function sendAdminSms(message) {
+async function sendTwilioSms(toPhone, message) {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER || !toPhone) {
+    console.log('SMS not sent — Twilio env vars or recipient phone missing');
+    return;
+  }
+  const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+  const body = new URLSearchParams({ To: toPhone, From: process.env.TWILIO_FROM_NUMBER, Body: message.slice(0, 300) });
   try {
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER || !process.env.ADMIN_SMS_PHONE) {
-      console.log('SMS not sent — Twilio env vars not fully configured');
-      return;
-    }
-    const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-    const body = new URLSearchParams({
-      To: process.env.ADMIN_SMS_PHONE,
-      From: process.env.TWILIO_FROM_NUMBER,
-      Body: message.slice(0, 300),
-    });
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -25,4 +17,15 @@ async function sendAdminSms(message) {
   }
 }
 
-module.exports = { sendAdminSms };
+// Alerts admin — used for internal events like contractor declines or
+// failed submissions.
+async function sendAdminSms(message) {
+  await sendTwilioSms(process.env.ADMIN_SMS_PHONE, message);
+}
+
+// Notifies a client directly — used for delivery notifications.
+async function sendClientSms(toPhone, message) {
+  await sendTwilioSms(toPhone, message);
+}
+
+module.exports = { sendAdminSms, sendClientSms };
