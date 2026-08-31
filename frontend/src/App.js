@@ -5,6 +5,7 @@ import * as api from "./api";
 import DrawingView from "./DrawingView";
 import ContractorPortal from "./ContractorPortal";
 import Chat from "./Chat";
+import SearchableSelect from "./SearchableSelect";
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
   tone1:"#D2CAC4",tone2:"#A9A09B",black1:"#42453C",
@@ -114,11 +115,12 @@ function ProjectsPage({user,onLogout}){
   const [lockToggling,setLockToggling]=useState({});
   const [syncingJobs,setSyncingJobs]=useState(false);
   const fileRefs=useRef({});
+  const refreshUserLists=()=>{if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}};
   useEffect(()=>{
     const loadProjects=()=>{api.getProjects().then(d=>{setProjects(d.projects);setLoading(false);if(user.role==="client"){const tk=localStorage.getItem("xpd_token");d.projects.forEach(p=>{if(p.monday_item_id){fetch((process.env.REACT_APP_API_URL||"")+"/api/proposals/project-status/"+p.id,{headers:{Authorization:"Bearer "+tk}}).then(r=>r.json()).then(s=>setProjectStatuses(prev=>({...prev,[p.id]:s}))).catch(()=>{});}});}});};
     loadProjects();
     let interval;if(user.role==="client"){interval=setInterval(loadProjects,30000);}
-    if(user.role==="team"||user.role==="admin"||user.role==="contractor"){api.getUsers().then(d=>{setClientsAll(d.users.filter(u=>u.role==="client"));setContractors(d.users.filter(u=>u.role==="contractor"));setTeamMembers(d.users.filter(u=>u.role==="team"));});}
+    refreshUserLists();
     return()=>clearInterval(interval);
   },[]);
   const createProject=async()=>{
@@ -132,8 +134,7 @@ function ProjectsPage({user,onLogout}){
   };
   const deleteProject=async(id)=>{
     if(!window.confirm("Delete this project?"))return;
-    await api.deleteProject(id);setProjects(projects.filter(p=>p.id!==id));
-  };
+    await api.deleteProject(id);setProjects(projects.filter(p=>p.id!==id));};
   const deleteDrawing=async(projectId,drawingId,e)=>{
     e.stopPropagation();if(!window.confirm("Delete this drawing?"))return;
     await api.deleteDrawing(projectId,drawingId);const d=await api.getProjects();setProjects(d.projects);
@@ -142,8 +143,7 @@ function ProjectsPage({user,onLogout}){
     const current=p.site_address||p.name;
     const newVal=prompt("Edit project name / site address:",current);
     if(!newVal||!newVal.trim()||newVal===current)return;
-    await api.updateProject(p.id,{siteAddress:newVal.trim()});setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));
-  };
+    await api.updateProject(p.id,{siteAddress:newVal.trim()});setProjects(projects.map(x=>x.id===p.id?{...x,site_address:newVal.trim()}:x));};
   const toggleLock=async(p)=>{
     const willLock=!p.locked;
     const confirmMsg=willLock?"Lock "+(p.job_number||p.name)+"? The client will immediately lose access to their plans.":"Manually unlock "+(p.job_number||p.name)+"? This will give the client access without payment.";
@@ -171,6 +171,7 @@ function ProjectsPage({user,onLogout}){
     setSyncingJobs(false);
   };
   const openEdit=(p)=>{
+    refreshUserLists();
     setEditingProject(p);
     setEditName(p.site_address||p.name||"");
     setEditJobNum(p.job_number||"");
@@ -193,7 +194,7 @@ function ProjectsPage({user,onLogout}){
     setEditingProject(null);
   };
   if(showHealth)return<SystemHealthPage onBack={()=>setShowHealth(false)}/>;
-  if(showAdmin)return<AdminPage user={user} onBack={()=>setShowAdmin(false)}/>;
+  if(showAdmin)return<AdminPage user={user} onBack={()=>{setShowAdmin(false);refreshUserLists();}}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
   const isTeam=user.role==="team"||user.role==="admin";
   return(
@@ -213,22 +214,13 @@ function ProjectsPage({user,onLogout}){
               ))}
             </div>
             {clients.length>0&&(
-              <select style={{...inputSt,marginBottom:8}} value={editClientId} onChange={e=>setEditClientId(e.target.value)}>
-                <option value="">No client assigned</option>
-                {clients.map(c=><option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
-              </select>
+              <SearchableSelect options={clients.map(c=>({id:c.id,label:c.name+" ("+c.email+")"}))} value={editClientId} onChange={setEditClientId} emptyLabel="No client assigned"/>
             )}
             {teamMembers.length>0&&(
-              <select style={{...inputSt,marginBottom:8}} value={editAssignedTo} onChange={e=>setEditAssignedTo(e.target.value)}>
-                <option value="">No team member assigned</option>
-                {teamMembers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              <SearchableSelect options={teamMembers.map(t=>({id:t.id,label:t.name}))} value={editAssignedTo} onChange={setEditAssignedTo} emptyLabel="No team member assigned"/>
             )}
             {contractors.length>0&&(
-              <select style={{...inputSt,marginBottom:16}} value={editContractorId} onChange={e=>setEditContractorId(e.target.value)}>
-                <option value="">No contractor assigned</option>
-                {contractors.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <SearchableSelect options={contractors.map(c=>({id:c.id,label:c.name}))} value={editContractorId} onChange={setEditContractorId} emptyLabel="No contractor assigned"/>
             )}
             <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:B.black1,marginBottom:16,cursor:"pointer",padding:"8px 10px",background:editNoFreeRevisions?"#FCEBEB":B.cream,borderRadius:7,border:"1px solid "+(editNoFreeRevisions?"#F7C1C1":B.tone1)}}><input type="checkbox" checked={editNoFreeRevisions} onChange={e=>setEditNoFreeRevisions(e.target.checked)}/> No free revisions — every future revision requires a variation fee</label>
             <div style={{display:"flex",gap:8}}>
@@ -255,7 +247,7 @@ function ProjectsPage({user,onLogout}){
             <h1 style={{fontSize:24,fontWeight:600,color:B.black,margin:0}}>Projects</h1>
             <p style={{fontSize:13,color:B.black2,margin:"4px 0 0"}}>Clear plans that keep your project moving.</p>
           </div>
-          {isTeam&&<button onClick={()=>setShowNew(v=>!v)} style={{marginLeft:"auto",padding:"8px 16px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600}}>+ New project</button>}
+          {isTeam&&<button onClick={()=>{setShowNew(v=>!v);refreshUserLists();}} style={{marginLeft:"auto",padding:"8px 16px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600}}>+ New project</button>}
         </div>
         {showNew&&(
           <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:20,borderLeft:"3px solid "+B.orange}}>
@@ -272,10 +264,7 @@ function ProjectsPage({user,onLogout}){
               ))}
             </div>
             {clients.length>0&&(
-              <select style={{...inputSt,marginBottom:10}} value={newClientId} onChange={e=>setNewClientId(e.target.value)}>
-                <option value="">No client assigned</option>
-                {clients.map(c=><option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
-              </select>
+              <SearchableSelect options={clients.map(c=>({id:c.id,label:c.name+" ("+c.email+")"}))} value={newClientId} onChange={setNewClientId} emptyLabel="No client assigned"/>
             )}
             <div style={{display:"flex",gap:8}}>
               <button onClick={createProject} style={btnPrimary}>Create project</button>
