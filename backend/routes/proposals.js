@@ -4,6 +4,7 @@ const { supabase } = require('../db');
 const { Resend } = require('resend');
 const crypto = require('crypto');
 const resend = new Resend(process.env.RESEND_API_KEY);
+const { sendClientSms } = require('../utils/sms');
 const PROPOSALS_BOARD_ID = '18389820785';
 const STARTED_PROJECTS_GROUP = 'group_mky4ey72';
 const CONTRACTOR_COL_PROPOSALS = 'board_relation_mky4v9kn';
@@ -11,6 +12,7 @@ const CONTRACTOR_EMAIL_COL = 'email_mkxzp1qw';
 const CONTRACTOR_PHONE_COL = 'phone_mkxzazqw';
 const COL = {
   email:        'email_mky1wg4h',
+  phone:        'phone_mky18hs6',
   jobNumber:    'text_mky9p0t3',
   siteAddress:  'text_mky7ram8',
   stage:        'color_mky4a52f',
@@ -76,6 +78,7 @@ router.post('/webhook', async (req, res) => {
     item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
     const clientName = item.name;
     const clientEmail = cols[COL.email];
+    const clientPhone = cols[COL.phone];
     const jobNumber = cols[COL.jobNumber];
     const siteAddress = cols[COL.siteAddress];
     console.log(`Client: ${clientName}, Email: ${clientEmail}, Job: ${jobNumber}, Site: ${siteAddress}`);
@@ -111,7 +114,7 @@ router.post('/webhook', async (req, res) => {
     if (!user) {
       const { data: newUser, error } = await supabase
         .from('users')
-        .insert({ name: clientName, email: clientEmail.toLowerCase().trim(), role: 'client' })
+        .insert({ name: clientName, email: clientEmail.toLowerCase().trim(), role: 'client', phone: clientPhone || null })
         .select().single();
       if (error) {
         console.error('Error creating user:', error.message);
@@ -119,6 +122,9 @@ router.post('/webhook', async (req, res) => {
       }
       user = newUser;
       console.log('Created new user:', user.id);
+    } else if (!user.phone && clientPhone) {
+      await supabase.from('users').update({ phone: clientPhone }).eq('id', user.id);
+      user.phone = clientPhone;
     }
     // Find or create portal project
     let { data: project } = await supabase
@@ -198,6 +204,7 @@ router.post('/webhook', async (req, res) => {
         <p style="color:#A9A09B;font-size:13px;margin-top:32px;">The Xpress Draft Team</p>
       </div>`
     });
+    await sendClientSms(user.phone, `Hi ${clientName}, congratulations on choosing Xpressdraft! By now, you should have received 2 emails: pre-consultation form and the client portal login access. Please do your best with the pre-consultation as that will help us better progress with your First sketch. Once this is done, you will receive a text message advising you that your drawings are ready to be collected over the portal. All the best!`);
     console.log(`Welcome email sent to ${clientEmail} for ${projectRef}`);
     res.json({ ok: true });
   } catch (err) {
