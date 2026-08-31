@@ -7,6 +7,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 const { auth } = require('../middleware/auth');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendAdminSms, sendClientSms } = require('../utils/sms');
+const { isLargeFile, uploadToR2 } = require('../utils/r2Storage');
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
   deliveryFile:   'file_mm67ta3v',
@@ -48,29 +49,17 @@ async function getMondayFileUrl(itemId, columnId) {
     const parsed = JSON.parse(colVal.value);
     const files = parsed?.files || [];
     console.log('Files found:', files.length);
-    return files.map(f => ({
-      name: f.name,
-      url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`,
-      asset_id: f.assetId
-    }));
+    return files.map(f => ({ name: f.name, url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`, asset_id: f.assetId }));
   } catch(e) {
     console.error('File parse error:', e.message);
     return [];
   }
 }
 async function updateMondayStatus(itemId, boardId, columnId, value) {
-  await mondayApi(`mutation {
-    change_column_value(
-      board_id: ${boardId}, item_id: ${itemId},
-      column_id: "${columnId}",
-      value: "{\\"label\\":\\"${value}\\"}"
-    ) { id }
-  }`);
+  await mondayApi(`mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: "{\\"label\\":\\"${value}\\"}") { id } }`);
 }
 async function addMondayNote(itemId, boardId, note) {
-  await mondayApi(`mutation {
-    create_update(item_id: ${itemId}, body: "${note}") { id }
-  }`);
+  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: "${note}") { id } }`);
 }
 async function sendEmail(to, subject, html, attachments = []) {
   const payload = { from: 'Xpress Draft <noreply@xpressdraft.com.au>', to, subject, html };
@@ -254,24 +243,32 @@ router.post('/webhook', async (req, res) => {
         const pdfRes = await fetch(publicUrl || pdfFile.url);
         const pdfBuffer = await pdfRes.arrayBuffer();
         const fileName = `${jobNumber}-${Date.now()}.pdf`;
-        const { error: uploadError } = await supabase.storage
-          .from('drawings')
-          .upload(`${project.id}/${fileName}`, Buffer.from(pdfBuffer), {
-            contentType: 'application/pdf', upsert: true
-          });
-        if (!uploadError) {
-          const { data: signedData } = await supabase.storage.from('drawings').createSignedUrl(`${project.id}/${fileName}`, 365 * 24 * 60 * 60);
-          const { data: drawing } = await supabase.from('drawings').insert({
-            project_id: project.id,
-            name: pdfFile.name,
-            file_url: signedData?.signedUrl,
-            file_path: `${project.id}/${fileName}`
-          }).select().single();
+
+        if (isLargeFile(pdfBuffer.byteLength)) {
+          const r2Url = await uploadToR2(Buffer.from(pdfBuffer), fileName, 'application/pdf');
+          const { data: drawing } = await supabase.from('drawings').insert({ project_id: project.id, name: pdfFile.name, file_url: r2Url, file_path: null }).select().single();
           pdfDrawingId = drawing?.id;
-          console.log(`PDF uploaded: ${fileName}`);
+          console.log(`Large PDF uploaded to R2: ${fileName}`);
         } else {
-          console.error('PDF storage upload failed:', uploadError.message || uploadError);
-          await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: The delivery PDF for job "${jobNumber}" failed to upload to the portal (possibly too large, or a storage error: ${uploadError.message || 'unknown'}). The client has NOT been notified — please upload manually via the Admin panel, then re-trigger delivery.`);
+          const { error: uploadError } = await supabase.storage
+            .from('drawings')
+            .upload(`${project.id}/${fileName}`, Buffer.from(pdfBuffer), {
+              contentType: 'application/pdf', upsert: true
+            });
+          if (!uploadError) {
+            const { data: signedData } = await supabase.storage.from('drawings').createSignedUrl(`${project.id}/${fileName}`, 365 * 24 * 60 * 60);
+            const { data: drawing } = await supabase.from('drawings').insert({
+              project_id: project.id,
+              name: pdfFile.name,
+              file_url: signedData?.signedUrl,
+              file_path: `${project.id}/${fileName}`
+            }).select().single();
+            pdfDrawingId = drawing?.id;
+            console.log(`PDF uploaded: ${fileName}`);
+          } else {
+            console.error('PDF storage upload failed:', uploadError.message || uploadError);
+            await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: The delivery PDF for job "${jobNumber}" failed to upload to the portal (storage error: ${uploadError.message || 'unknown'}). The client has NOT been notified — please upload manually via the Admin panel, then re-trigger delivery.`);
+          }
         }
       } catch (e) {
         console.error('PDF upload error:', e);
