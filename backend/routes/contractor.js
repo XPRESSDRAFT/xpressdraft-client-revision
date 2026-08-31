@@ -313,6 +313,29 @@ router.post('/jobs/:jobId/accept', auth, async (req, res) => {
       </div>`
     });
 
+    // Post a welcome message into the project chat so the client gets
+    // introduced to their assigned designer right away, then email them
+    // to check the portal — same pattern used for any other new message.
+    const welcomeMsg = `Hi! I'm now looking after your project and will be in touch here with any updates or questions. Feel free to reach out anytime through this chat. Looking forward to working with you!`;
+    await supabase.from('project_messages').insert({
+      project_id: job.project.id, sender_id: req.user.id, sender_role: 'contractor', message: welcomeMsg
+    });
+    await supabase.from('projects').update({ last_message_at: new Date().toISOString() }).eq('id', job.project.id);
+    if (job.project.client_id) {
+      const { data: clientUser } = await supabase.from('users').select('name, email').eq('id', job.project.client_id).single();
+      if (clientUser?.email) {
+        await resend.emails.send({
+          from: 'Xpress Draft <noreply@xpressdraft.com.au>',
+          to: clientUser.email,
+          subject: `New message from your designer — ${jobRef}`,
+          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+            <h2 style="color:#2A2B29;">New message</h2>
+            <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${clientUser.name},<br/><br/>You have a new message from your assigned designer on <strong>${jobRef}</strong> — check the Messages tab in your portal.</p>
+            <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open portal →</a>
+          </div>`
+        });
+      }
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
