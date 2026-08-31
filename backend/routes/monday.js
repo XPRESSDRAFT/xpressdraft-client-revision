@@ -40,13 +40,7 @@ async function getMondayItem(itemId) {
   return data?.data?.items?.[0];
 }
 async function getMondayFileUrl(itemId, columnId) {
-  const data = await mondayApi(`{
-    items(ids: [${itemId}]) {
-      column_values(ids: ["${columnId}"]) {
-        id value text
-      }
-    }
-  }`);
+  const data = await mondayApi(`{ items(ids: [${itemId}]) { column_values(ids: ["${columnId}"]) { id value text } } }`);
   console.log('File column raw:', JSON.stringify(data?.data?.items?.[0]?.column_values?.[0]));
   const colVal = data?.data?.items?.[0]?.column_values?.[0];
   if (!colVal?.value) return [];
@@ -275,6 +269,9 @@ router.post('/webhook', async (req, res) => {
           }).select().single();
           pdfDrawingId = drawing?.id;
           console.log(`PDF uploaded: ${fileName}`);
+        } else {
+          console.error('PDF storage upload failed:', uploadError.message || uploadError);
+          await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: The delivery PDF for job "${jobNumber}" failed to upload to the portal (possibly too large, or a storage error: ${uploadError.message || 'unknown'}). The client has NOT been notified — please upload manually via the Admin panel, then re-trigger delivery.`);
         }
       } catch (e) {
         console.error('PDF upload error:', e);
@@ -307,6 +304,12 @@ router.post('/webhook', async (req, res) => {
         console.error('ZIP upload error:', e);
         await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: Failed to upload DWG files for job "${jobNumber}".`);
       }
+    }
+    if (!pdfDrawingId) {
+      console.error(`Blocking delivery for job "${jobNumber}" — PDF never uploaded successfully.`);
+      await updateMondayStatus(pulseId, boardId, COL.deliveryStatus, 'FAIL');
+      await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: Delivery for job "${jobNumber}" was NOT sent — no PDF was found or the upload failed. Upload manually via the Admin panel, then re-trigger READY TO DELIVER.`);
+      return res.json({ ok: true, message: 'Delivery blocked — no PDF uploaded' });
     }
     const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
