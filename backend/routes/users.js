@@ -93,8 +93,9 @@ function buildResendEmail(user, loginUrl) {
 
 router.post('/', auth, teamOnly, async (req, res) => {
   try {
-    const { name, email, role = 'client', sendInvite = false } = req.body;
+    const { name, email, role = 'client', phone, sendInvite = false } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
+    if (role === 'client' && !phone) return res.status(400).json({ error: 'Phone number is required for client accounts, so they can receive SMS delivery notifications.' });
 
     const { data: existing } = await supabase
       .from('users').select('id').eq('email', email.toLowerCase().trim()).single();
@@ -102,7 +103,7 @@ router.post('/', auth, teamOnly, async (req, res) => {
 
     const { data: user, error } = await supabase
       .from('users')
-      .insert({ name, email: email.toLowerCase().trim(), role })
+      .insert({ name, email: email.toLowerCase().trim(), role, phone: phone || null })
       .select().single();
 
     if (error) throw error;
@@ -175,6 +176,11 @@ router.delete('/:id', auth, teamOnly, async (req, res) => {
 router.put('/:id', auth, teamOnly, async (req, res) => {
   try {
     const { name, email, role, phone, active } = req.body;
+    const { data: existingUser } = await supabase.from('users').select('role, phone').eq('id', req.params.id).single();
+    const effectiveRole = role !== undefined ? role : existingUser?.role;
+    const effectivePhone = phone !== undefined ? phone : existingUser?.phone;
+    if (effectiveRole === 'client' && !effectivePhone) return res.status(400).json({ error: 'Phone number is required for client accounts, so they can receive SMS delivery notifications.' });
+
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (email !== undefined) updates.email = email.toLowerCase().trim();
