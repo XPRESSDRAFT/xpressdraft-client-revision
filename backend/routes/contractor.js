@@ -202,7 +202,15 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
       client = clientUser || null;
     }
 
-    res.json({ job, proposalDetails, client, mondayStatus, dollarFee });
+    // Real current pending-request state — not just what the frontend
+    // remembers locally, so a denial (or approval) is always reflected
+    // correctly even without a page reload.
+    const { data: pendingRequests } = await supabase
+      .from('contractor_fee_requests').select('option_key')
+      .eq('contractor_job_id', job.id).eq('status', 'pending');
+    const pendingFeeRequestOptions = (pendingRequests || []).map(r => r.option_key);
+
+    res.json({ job, proposalDetails, client, mondayStatus, dollarFee, pendingFeeRequestOptions });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
