@@ -30,6 +30,7 @@ app.use('/api/contractor', require('./routes/contractor-invoices'));
 app.use('/api/projects/:projectId/messages', require('./routes/messages'));
 app.use('/api/contractor/jobs/:jobId/messages', require('./routes/contractor-messages'));
 app.use('/api/attachments', require('./routes/attachments'));
+app.use('/api/fee-requests', require('./routes/fee-requests'));
 app.use('/api/contractor-files', require('./routes/contractor-files'));
 app.use((err, req, res, next) => {
   console.error(err.stack);
