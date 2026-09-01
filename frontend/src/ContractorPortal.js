@@ -24,6 +24,10 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
   const ms = jobDetails?.mondayStatus;
   const [tab,setTab]=useState("overview");
   const [pendingFeeRequests,setPendingFeeRequests]=useState([]);
+  // Uses the real current pending state from the server, not just what
+  // was optimistically set locally — so a denial (allowing re-request)
+  // or approval is always reflected correctly, even without a reload.
+  useEffect(()=>{setPendingFeeRequests(jobDetails?.pendingFeeRequestOptions||[]);},[jobDetails]);
   const requestFeeOption=async(optionKey)=>{
     try{
       const r=await fetch(apiBase+"/api/contractor/jobs/"+job.id+"/fee-requests",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},body:JSON.stringify({optionKey})});
