@@ -23,6 +23,15 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
   const client = jobDetails?.client; // only populated by the backend once job.status === 'accepted'
   const ms = jobDetails?.mondayStatus;
   const [tab,setTab]=useState("overview");
+  const [pendingFeeRequests,setPendingFeeRequests]=useState([]);
+  const requestFeeOption=async(optionKey)=>{
+    try{
+      const r=await fetch(apiBase+"/api/contractor/jobs/"+job.id+"/fee-requests",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},body:JSON.stringify({optionKey})});
+      if(!r.ok){const d=await r.json().catch(()=>({}));if(r.status===409){setPendingFeeRequests(prev=>[...prev,optionKey]);return;}throw new Error(d.error||"Failed to send request");}
+      setPendingFeeRequests(prev=>[...prev,optionKey]);
+      alert("Request sent — you'll be notified once it's reviewed.");
+    }catch(e){alert("Failed to send request: "+e.message);}
+  };
   return (
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
       <nav style={{background:"#444444",padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:12}}>
@@ -153,6 +162,21 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
                     {job.renders_3d&&<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>3D Renders</span>}
                   </div>
                 )}
+              </div>
+            )}
+            {job.status==="accepted"&&(!job.site_visit||!job.model_3d||!job.renders_3d)&&(
+              <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
+                <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 10px"}}>Request Additional Options</h3>
+                <p style={{fontSize:12,color:B.black2,margin:"0 0 12px"}}>Requires admin approval before it's added to your fee.</p>
+                {[["siteVisit","Site Visit",job.site_visit],["model3d","3D Model",job.model_3d],["renders3d","3D Renders",job.renders_3d]].filter(([,,has])=>!has).map(([key,label])=>{
+                  const pending=pendingFeeRequests.includes(key);
+                  return (
+                    <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid "+B.cream}}>
+                      <span style={{fontSize:13,color:B.black1}}>{label}</span>
+                      <button onClick={()=>requestFeeOption(key)} disabled={pending} style={{...btnGhost,fontSize:12,opacity:pending?0.6:1,cursor:pending?"default":"pointer"}}>{pending?"Requested — pending":"Request"}</button>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {job.status==="accepted"&&<ContractorUpload jobId={job.id} apiBase={apiBase} token={token} stage={job.project?.stage}/>}
