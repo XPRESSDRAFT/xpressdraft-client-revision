@@ -237,6 +237,23 @@ router.put('/jobs/:jobId/fee', auth, async (req, res) => {
     if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
 
     const { siteVisit, model3d, renders3d } = req.body;
+
+    const { data: current } = await supabase
+      .from('contractor_jobs').select('status, site_visit, model_3d, renders_3d')
+      .eq('id', req.params.jobId).eq('contractor_id', req.user.id).single();
+    if (!current) return res.status(404).json({ error: 'Job not found' });
+
+    // Once accepted, a contractor can remove an option freely but can't
+    // newly enable one directly — that has to go through admin approval
+    // instead (POST /jobs/:jobId/fee-requests).
+    if (current.status === 'accepted') {
+      const blocked = [];
+      if (siteVisit && !current.site_visit) blocked.push('Site Visit');
+      if (model3d && !current.model_3d) blocked.push('3D Model');
+      if (renders3d && !current.renders_3d) blocked.push('3D Renders');
+      if (blocked.length > 0) return res.status(403).json({ error: `${blocked.join(', ')} require${blocked.length === 1 ? 's' : ''} admin approval — please request ${blocked.length === 1 ? 'it' : 'them'} instead.` });
+    }
+
     const totalFee = 25 + (siteVisit ? 5 : 0) + (model3d ? 5 : 0) + (renders3d ? 5 : 0);
 
     const { data, error } = await supabase
@@ -264,6 +281,48 @@ router.put('/jobs/:jobId/fee', auth, async (req, res) => {
     } catch (mondayErr) { console.error('Fee sync to Monday error:', mondayErr.message); }
 
     res.json({ job: data, totalFee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Contractor requests one specific optional fee be added after acceptance
+// — requires admin approval before it actually applies.
+router.post('/jobs/:jobId/fee-requests', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const { optionKey } = req.body;
+    if (!['siteVisit', 'model3d', 'renders3d'].includes(optionKey)) return res.status(400).json({ error: 'Invalid option' });
+
+    const { data: job } = await supabase
+      .from('contractor_jobs')
+      .select(`*, project:projects(job_number, site_address, name)`)
+      .eq('id', req.params.jobId).eq('contractor_id', req.user.id).eq('status', 'accepted').single();
+    if (!job) return res.status(404).json({ error: 'Accepted job not found' });
+
+    const { data: existingRequest } = await supabase
+      .from('contractor_fee_requests').select('id')
+      .eq('contractor_job_id', job.id).eq('option_key', optionKey).eq('status', 'pending').maybeSingle();
+    if (existingRequest) return res.status(409).json({ error: 'A request for this option is already pending.' });
+
+    await supabase.from('contractor_fee_requests').insert({
+      contractor_job_id: job.id, contractor_id: req.user.id, option_key: optionKey
+    });
+
+    const jobRef = [job.project.job_number, job.project.site_address].filter(Boolean).join(' — ') || job.project.name;
+    const optionLabel = { siteVisit: 'Site Visit', model3d: '3D Model', renders3d: '3D Renders' }[optionKey];
+    await sendAdminSms(`Fee request: ${req.user.name} wants to add ${optionLabel} on ${jobRef}. Review in Admin > Contractor Requests.`);
+    await resend.emails.send({
+      from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
+      to: 'info@xpressdraft.com.au',
+      subject: `Fee option request — ${jobRef}`,
+      html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
+        <h2 style="color:#2A2B29;">Contractor requested an additional fee option</h2>
+        <p style="color:#5E635B;font-size:15px;line-height:1.8;"><strong>${req.user.name}</strong> requested <strong>${optionLabel}</strong> be added to their fee on <strong>${jobRef}</strong>. Review and approve or deny it under Admin &gt; Contractor Requests.</p>
+      </div>`
+    });
+
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
