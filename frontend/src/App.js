@@ -6,6 +6,7 @@ import DrawingView from "./DrawingView";
 import ContractorPortal from "./ContractorPortal";
 import Chat from "./Chat";
 import SearchableSelect from "./SearchableSelect";
+import ContractorRequestsPage from "./ContractorRequestsPage";
 const B = {
   orange:"#EA672F",black:"#2A2B29",cream:"#F3EAE5",
   tone1:"#D2CAC4",tone2:"#A9A09B",black1:"#42453C",
@@ -102,6 +103,7 @@ function ProjectsPage({user,onLogout}){
   const [activeProject,setActiveProject]=useState(null);
   const [showAdmin,setShowAdmin]=useState(false);
   const [showHealth,setShowHealth]=useState(false);
+  const [showFeeRequests,setShowFeeRequests]=useState(false);
   const [editingProject,setEditingProject]=useState(null);
   const [editName,setEditName]=useState("");
   const [editJobNum,setEditJobNum]=useState("");
@@ -202,6 +204,7 @@ function ProjectsPage({user,onLogout}){
     setEditingProject(null);
   };
   if(showHealth)return<SystemHealthPage onBack={()=>setShowHealth(false)}/>;
+  if(showFeeRequests)return<ContractorRequestsPage onBack={()=>setShowFeeRequests(false)}/>;
   if(showAdmin)return<AdminPage user={user} onBack={()=>{setShowAdmin(false);refreshUserLists();}}/>;
   if(activeProject)return<ProjectDetail project={activeProject} user={user} onBack={()=>setActiveProject(null)}/>;
   const isTeam=user.role==="team"||user.role==="admin";
@@ -243,6 +246,7 @@ function ProjectsPage({user,onLogout}){
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           {user.role==="admin"&&<button onClick={()=>setShowAdmin(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Admin</button>}
           {user.role==="admin"&&<button onClick={()=>setShowHealth(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>System</button>}
+          {user.role==="admin"&&<button onClick={()=>setShowFeeRequests(true)} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Contractor Requests</button>}
           {user.role==="admin"&&<button onClick={syncContractorJobs} disabled={syncingJobs} style={{background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:syncingJobs?"default":"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",opacity:syncingJobs?0.6:1}}>{syncingJobs?"Syncing...":"Sync Contractor Jobs"}</button>}
           <span style={{fontSize:13,color:B.tone2}}>{user.name}</span>
           <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:user.role==="admin"?"#7F77DD":user.role==="team"?B.orange:user.role==="contractor"?"#378ADD":"#639922",color:B.white,fontWeight:600}}>{user.role}</span>
@@ -382,8 +386,7 @@ function AdminPage({user,onBack}){
     }catch(e){setMsg("Failed to remove user");}
   };
   const resendInvite=async(id,name)=>{
-    try{await api.resendInvite(id);setMsg("Invite resent to "+name+".");}
-    catch(e){setMsg("Failed to resend invite");}
+    try{await api.resendInvite(id);setMsg("Invite resent to "+name+".");}catch(e){setMsg("Failed to resend invite");}
   };
   const toggleUserActive=async(u)=>{
     const willSuspend=u.active!==false;
