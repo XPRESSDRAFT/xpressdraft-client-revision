@@ -158,7 +158,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
             })()}
             {job.status==="accepted"&&(
               <div style={{background:"#EAF3DE",border:"1px solid #639922",borderRadius:10,padding:"1.25rem",marginBottom:16,textAlign:"center"}}>
-                <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee</p>
+                <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee (${(jobDetails?.dollarFee||0).toLocaleString()})</p>
                 {(job.site_visit||job.model_3d||job.renders_3d)&&(
                   <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:8,flexWrap:"wrap"}}>
                     {job.site_visit&&<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,background:B.white,color:"#2E5C10",border:"1px solid #639922",fontWeight:600}}>Site Visit</span>}
