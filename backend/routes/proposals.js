@@ -27,6 +27,9 @@ async function mondayApi(query) {
   });
   return res.json();
 }
+async function addMondayNote(itemId, note) {
+  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: "${note}") { id } }`);
+}
 async function getProposalItem(itemId) {
   const data = await mondayApi(`{
     items(ids: [${itemId}]) {
@@ -77,13 +80,20 @@ router.post('/webhook', async (req, res) => {
     const cols = {};
     item.column_values.forEach(col => { cols[col.id] = col.text || ''; });
     const clientName = item.name;
-    const clientEmail = cols[COL.email];
+    // The Email column sometimes contains duplicated/malformed text (e.g.
+    // from a duplicated Monday item) — extract the first valid email
+    // rather than blindly trusting the whole field, so a corrupted value
+    // like "x@y.com - x@y.com" doesn't get saved verbatim as the account.
+    const rawEmail = cols[COL.email] || '';
+    const emailMatch = rawEmail.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const clientEmail = emailMatch ? emailMatch[0] : null;
     const clientPhone = cols[COL.phone];
     const jobNumber = cols[COL.jobNumber];
     const siteAddress = cols[COL.siteAddress];
-    console.log(`Client: ${clientName}, Email: ${clientEmail}, Job: ${jobNumber}, Site: ${siteAddress}`);
+    console.log(`Client: ${clientName}, Email: ${clientEmail} (raw: ${rawEmail}), Phone: ${clientPhone || 'none'}, Job: ${jobNumber}, Site: ${siteAddress}`);
     if (!clientEmail) {
-      console.error('No client email found for item:', pulseId);
+      console.error('No valid client email found for item:', pulseId);
+      await addMondayNote(pulseId, `⚠️ Xpress Draft Portal: Could not find a valid email address in the Email column (raw value: "${rawEmail}"). Please fix and re-trigger.`);
       return res.json({ ok: true });
     }
     // Get contractor from Proposals board relation
