@@ -203,7 +203,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
                 })}
               </div>
             )}
-            {job.status==="accepted"&&<ContractorUpload jobId={job.id} apiBase={apiBase} token={token} stage={job.project?.stage}/>}
+            {job.status==="accepted"&&<ContractorUpload jobId={job.id} apiBase={apiBase} token={token} stage={job.project?.stage} revisionKey={effectiveMs?.stage+"|"+effectiveMs?.revision}/>}
           </>
         )}
       </div>
