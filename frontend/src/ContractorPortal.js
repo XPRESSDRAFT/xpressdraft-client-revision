@@ -72,7 +72,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
               {["FIRST DRAFT",..."ABCDEFGHIJKLMN".split("").map(l=>"ISSUE - "+l)].map(v=><option key={v} value={v}>{v}</option>)}
             </select>
             <select value={effectiveMs.timeline} onChange={e=>updateStatusField("timeline",e.target.value)} style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600,border:"1px solid #C5DCF5"}}>
-              {["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"].map(v=><option key={v} value={v}>{v}</option>)}
+              {["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION","AWAITING CLIENT"].map(v=><option key={v} value={v}>{v}</option>)}
             </select>
             {statusSaving&&<span style={{fontSize:11,color:B.black2}}>Saving...</span>}
           </div>
