@@ -242,7 +242,7 @@ router.get('/jobs/:jobId/instructions', auth, async (req, res) => {
 // Update fee selections
 const STAGE_OPTIONS = ['PR - STAGE', 'WD - STAGE'];
 const REVISION_OPTIONS = ['FIRST DRAFT', ...'ABCDEFGHIJKLMN'.split('').map(l => `ISSUE - ${l}`)];
-const TIMELINE_OPTIONS = ['STARTED', 'PROJECT OVERVIEW', '3D MODEL', 'DESIGN', '25%', '50%', '75%', 'FINAL REVISION'];
+const TIMELINE_OPTIONS = ['STARTED', 'PROJECT OVERVIEW', '3D MODEL', 'DESIGN', '25%', '50%', '75%', 'FINAL REVISION', 'AWAITING CLIENT'];
 const STATUS_FIELD = {
   stage: { column: 'color_mky4a52f', options: STAGE_OPTIONS },
   revision: { column: 'color_mky4x01c', options: REVISION_OPTIONS },
