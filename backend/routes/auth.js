@@ -31,6 +31,33 @@ async function moveToAwaitingClient(mondayItemId) {
     console.error('Monday move group error:', err);
   }
 }
+// Sets the Timeline column itself to "AWAITING CLIENT" at the same
+// moment — so a contractor glancing at Timeline (which they can now edit
+// directly) can tell at a glance the client has just seen the latest
+// changes, without needing to check the board's group layout.
+async function setTimelineAwaitingClient(mondayItemId) {
+  try {
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${process.env.MONDAY_BOARD_ID},
+        item_id: ${mondayItemId},
+        column_id: "color_mky440wt",
+        value: "{\\"label\\":\\"AWAITING CLIENT\\"}"
+      ) { id }
+    }`;
+    await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': process.env.MONDAY_API_TOKEN
+      },
+      body: JSON.stringify({ query: mutation })
+    });
+    console.log(`Set Timeline to AWAITING CLIENT for item ${mondayItemId}`);
+  } catch (err) {
+    console.error('Monday Timeline update error:', err);
+  }
+}
 
 router.post('/magic-link', async (req, res) => {
   try {
@@ -135,6 +162,7 @@ router.post('/verify', async (req, res) => {
 
       if (projects && projects.length > 0 && projects[0].monday_item_id) {
         await moveToAwaitingClient(projects[0].monday_item_id);
+        await setTimelineAwaitingClient(projects[0].monday_item_id);
       }
     }
 
