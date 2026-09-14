@@ -240,6 +240,39 @@ router.get('/jobs/:jobId/instructions', auth, async (req, res) => {
 });
 
 // Update fee selections
+const STAGE_OPTIONS = ['PR - STAGE', 'WD - STAGE'];
+const REVISION_OPTIONS = ['FIRST DRAFT', ...'ABCDEFGHIJKLMN'.split('').map(l => `ISSUE - ${l}`)];
+const TIMELINE_OPTIONS = ['STARTED', 'PROJECT OVERVIEW', '3D MODEL', 'DESIGN', '25%', '50%', '75%', 'FINAL REVISION'];
+const STATUS_FIELD = {
+  stage: { column: 'color_mky4a52f', options: STAGE_OPTIONS },
+  revision: { column: 'color_mky4x01c', options: REVISION_OPTIONS },
+  timeline: { column: 'color_mky440wt', options: TIMELINE_OPTIONS },
+};
+
+// Lets a contractor edit Stage/Revision/Timeline directly from their
+// portal — saves immediately, synced straight to Monday. In-house team
+// members edit these directly on Monday instead, so this is
+// contractor-only.
+router.put('/jobs/:jobId/status', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const { field, value } = req.body;
+    const config = STATUS_FIELD[field];
+    if (!config) return res.status(400).json({ error: 'Invalid field' });
+    if (!config.options.includes(value)) return res.status(400).json({ error: 'Invalid value for ' + field });
+
+    const { data: job } = await supabase
+      .from('contractor_jobs').select(`*, project:projects(monday_item_id)`)
+      .eq('id', req.params.jobId).eq('contractor_id', req.user.id).single();
+    if (!job || !job.project?.monday_item_id) return res.status(404).json({ error: 'Job or Monday link not found' });
+
+    await mondayApi(`mutation { change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${job.project.monday_item_id}, column_id: "${config.column}", value: "{\\"label\\":\\"${value}\\"}") { id } }`);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/jobs/:jobId/fee', auth, async (req, res) => {
   try {
     if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
