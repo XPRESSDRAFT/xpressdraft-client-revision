@@ -24,6 +24,19 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
   const ms = jobDetails?.mondayStatus;
   const [tab,setTab]=useState("overview");
   const [pendingFeeRequests,setPendingFeeRequests]=useState([]);
+  const [msOverride,setMsOverride]=useState({});
+  useEffect(()=>{setMsOverride({});},[job.id]);
+  const [statusSaving,setStatusSaving]=useState(false);
+  const effectiveMs=ms?{...ms,...msOverride}:ms;
+  const updateStatusField=async(field,value)=>{
+    setStatusSaving(true);
+    setMsOverride(prev=>({...prev,[field]:value}));
+    try{
+      const r=await fetch(apiBase+"/api/contractor/jobs/"+job.id+"/status",{method:"PUT",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},body:JSON.stringify({field,value})});
+      if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"Failed to update");}
+    }catch(e){alert("Failed to update "+field+": "+e.message);}
+    setStatusSaving(false);
+  };
   // Uses the real current pending state from the server, not just what
   // was optimistically set locally — so a denial (allowing re-request)
   // or approval is always reflected correctly, even without a reload.
@@ -50,11 +63,18 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
           <span style={{fontSize:12,padding:"3px 10px",borderRadius:20,background:job.status==="accepted"?"#EAF3DE":job.status==="declined"?"#FCEBEB":"#FEF3E8",color:job.status==="accepted"?"#2E5C10":job.status==="declined"?"#8B2020":B.orange,fontWeight:600}}>{job.status.toUpperCase()}</span>
         </div>
         {ms&&(
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16,alignItems:"center"}}>
             <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#F0EEF8",color:"#3D3580",fontWeight:600}}>{ms.jobType}</span>
-            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600}}>{ms.stage}</span>
-            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:600,border:"1px solid "+B.tone1}}>{ms.revision}</span>
-            <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600}}>{ms.timeline}</span>
+            <select value={effectiveMs.stage} onChange={e=>updateStatusField("stage",e.target.value)} style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"#FEF3E8",color:B.orange,fontWeight:600,border:"1px solid "+B.orange}}>
+              {["PR - STAGE","WD - STAGE"].map(v=><option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={effectiveMs.revision} onChange={e=>updateStatusField("revision",e.target.value)} style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:B.cream,color:B.black1,fontWeight:600,border:"1px solid "+B.tone1}}>
+              {["FIRST DRAFT",..."ABCDEFGHIJKLMN".split("").map(l=>"ISSUE - "+l)].map(v=><option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={effectiveMs.timeline} onChange={e=>updateStatusField("timeline",e.target.value)} style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600,border:"1px solid #C5DCF5"}}>
+              {["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION"].map(v=><option key={v} value={v}>{v}</option>)}
+            </select>
+            {statusSaving&&<span style={{fontSize:11,color:B.black2}}>Saving...</span>}
           </div>
         )}
         {job.status==="accepted"&&(
