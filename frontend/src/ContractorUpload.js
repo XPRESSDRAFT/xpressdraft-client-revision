@@ -21,7 +21,7 @@ function ActionRow({ label, hint, done, doneLabel, busy, onTrigger, triggerLabel
   );
 }
 
-export default function ContractorUpload({ jobId, apiBase, token, stage }) {
+export default function ContractorUpload({ jobId, apiBase, token, stage, revisionKey }) {
   const [status,setStatus]=useState(null);
   const [loading,setLoading]=useState(true);
   const [busyAction,setBusyAction]=useState(null);
@@ -32,7 +32,10 @@ export default function ContractorUpload({ jobId, apiBase, token, stage }) {
     fetch(apiBase+"/api/contractor-files/"+jobId+"/status",{headers:{Authorization:"Bearer "+token}})
       .then(r=>r.json()).then(d=>{setStatus(d);setLoading(false);}).catch(()=>setLoading(false));
   };
-  useEffect(()=>{load();},[jobId]);
+  // Re-fetches whenever the contractor edits Stage/Revision elsewhere on
+  // the page, not just when the job first opens — otherwise this window
+  // could keep showing (and uploading against) a stale revision.
+  useEffect(()=>{load();},[jobId,revisionKey]);
 
   const uploadWorking=async(file)=>{
     if(!file)return;
