@@ -1,0 +1,17 @@
+const { supabase } = require('../db');
+
+// Logs a history entry the moment WE upload something to Monday's
+// Instructions column, rather than waiting for Monday's own webhook to
+// tell us it happened — that webhook has been confirmed unreliable for
+// files added via the API (only fires reliably for manual edits made
+// directly on Monday's own interface).
+async function logInstructionEntry(projectId, entry) {
+  try {
+    await supabase.from('job_instructions').insert({ project_id: projectId, ...entry });
+    await supabase.from('projects').update({ last_instructions_at: new Date().toISOString() }).eq('id', projectId);
+  } catch (e) {
+    console.error('logInstructionEntry error:', e.message);
+  }
+}
+
+module.exports = { logInstructionEntry };
