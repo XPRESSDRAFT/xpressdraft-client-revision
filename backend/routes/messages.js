@@ -4,31 +4,36 @@ const { supabase } = require('../db');
 const { auth } = require('../middleware/auth');
 const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
+const { sendClientSms } = require('../utils/sms');
 
 async function notifyOtherParty(project, senderRole, message) {
   try {
-    const recipients = [];
+    const jobRef = [project.job_number, project.site_address].filter(Boolean).join(' — ') || project.name;
+
+    // Client recipient gets SMS instead of email — clients reliably have
+    // a phone on file, and this reaches them faster than an inbox check.
     if (senderRole !== 'client' && project.client_id) {
-      const { data: client } = await supabase.from('users').select('name, email').eq('id', project.client_id).single();
-      if (client?.email) recipients.push(client);
+      const { data: client } = await supabase.from('users').select('name, phone').eq('id', project.client_id).single();
+      if (client?.phone) {
+        await sendClientSms(client.phone, `Hi ${client.name}, you have a new message from your designer on ${jobRef}. Please check your Xpress Draft portal to read and reply. Sincerely, XPRESSDRAFT TEAM - No reply.`);
+      }
     }
+    // Contractor recipient still gets email — not part of this change.
     if (senderRole !== 'contractor' && project.contractor_id) {
       const { data: contractor } = await supabase.from('users').select('name, email').eq('id', project.contractor_id).single();
-      if (contractor?.email) recipients.push(contractor);
-    }
-    const jobRef = [project.job_number, project.site_address].filter(Boolean).join(' — ') || project.name;
-    for (const r of recipients) {
-      await resend.emails.send({
-        from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
-        to: r.email,
-        subject: `New message — ${jobRef}`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
-          <h2 style="color:#2A2B29;">New message</h2>
-          <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${r.name},<br/><br/>You have a new message on <strong>${jobRef}</strong>:</p>
-          <div style="background:#F3EAE5;padding:16px;border-radius:8px;color:#42453C;font-size:14px;">${message}</div>
-          <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open portal →</a>
-        </div>`
-      });
+      if (contractor?.email) {
+        await resend.emails.send({
+          from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
+          to: contractor.email,
+          subject: `New message — ${jobRef}`,
+          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
+            <h2 style="color:#2A2B29;">New message</h2>
+            <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${contractor.name},<br/><br/>You have a new message on <strong>${jobRef}</strong>:</p>
+            <div style="background:#F3EAE5;padding:16px;border-radius:8px;color:#42453C;font-size:14px;">${message}</div>
+            <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open portal →</a>
+          </div>`
+        });
+      }
     }
   } catch (e) { console.error('Message notification error:', e.message); }
 }
