@@ -2,8 +2,6 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { supabase } = require('../db');
 const { auth } = require('../middleware/auth');
-const { Resend } = require('resend');
-const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendClientSms } = require('../utils/sms');
 
 async function notifyOtherParty(project, senderRole, message) {
@@ -18,21 +16,12 @@ async function notifyOtherParty(project, senderRole, message) {
         await sendClientSms(client.phone, `Hi ${client.name}, you have a new message from your designer on ${jobRef}. Please check your Xpress Draft portal to read and reply. Sincerely, XPRESSDRAFT TEAM - No reply.`);
       }
     }
-    // Contractor recipient still gets email — not part of this change.
+    // Contractor recipient gets SMS only — matches the client side,
+    // replacing email entirely for this specific notification.
     if (senderRole !== 'contractor' && project.contractor_id) {
-      const { data: contractor } = await supabase.from('users').select('name, email').eq('id', project.contractor_id).single();
-      if (contractor?.email) {
-        await resend.emails.send({
-          from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
-          to: contractor.email,
-          subject: `New message — ${jobRef}`,
-          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;">
-            <h2 style="color:#2A2B29;">New message</h2>
-            <p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${contractor.name},<br/><br/>You have a new message on <strong>${jobRef}</strong>:</p>
-            <div style="background:#F3EAE5;padding:16px;border-radius:8px;color:#42453C;font-size:14px;">${message}</div>
-            <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open portal →</a>
-          </div>`
-        });
+      const { data: contractor } = await supabase.from('users').select('name, phone').eq('id', project.contractor_id).single();
+      if (contractor?.phone) {
+        await sendClientSms(contractor.phone, `Hi ${contractor.name}, you have a new message from the client on ${jobRef}. Please check your Xpress Draft portal to read and reply.`);
       }
     }
   } catch (e) { console.error('Message notification error:', e.message); }
