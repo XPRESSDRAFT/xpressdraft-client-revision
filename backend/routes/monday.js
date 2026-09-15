@@ -316,38 +316,28 @@ router.post('/webhook', async (req, res) => {
     let deliveryType, emailSubject, emailHtml, paymentLink = null;
     const effectiveFirstIssue = isFirstIssue && !alreadyPaidForStage;
     if (effectiveFirstIssue && !isWD && partialPayment) {
-      deliveryType = 'pr_first_payment';
-      paymentLink = partialPayment;
-      emailSubject = `Your plans are ready — ${projectRef}`;
-      emailHtml = paymentEmailHtml(clientName, partialPayment, false, projectRef);
+      deliveryType = 'pr_first_payment'; paymentLink = partialPayment;
+      emailSubject = `Your plans are ready — ${projectRef}`; emailHtml = paymentEmailHtml(clientName, partialPayment, false, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: partialPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && finalPayment && !effectiveFirstIssue) {
-      deliveryType = 'wd_final_payment';
-      paymentLink = finalPayment;
-      emailSubject = `Your working drawings are ready — ${projectRef}`;
-      emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
+      deliveryType = 'wd_final_payment'; paymentLink = finalPayment;
+      emailSubject = `Your working drawings are ready — ${projectRef}`; emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && finalPayment && effectiveFirstIssue) {
-      deliveryType = 'wd_first_payment';
-      paymentLink = finalPayment;
-      emailSubject = `Your working drawings are ready — ${projectRef}`;
-      emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
+      deliveryType = 'wd_first_payment'; paymentLink = finalPayment;
+      emailSubject = `Your working drawings are ready — ${projectRef}`; emailHtml = paymentEmailHtml(clientName, finalPayment, true, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: finalPayment, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (isWD && effectiveFirstIssue && !finalPayment) {
       deliveryType = 'wd_first_free';
-      emailSubject = `Your working drawings are ready for review — ${projectRef}`;
-      emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl, projectRef);
+      emailSubject = `Your working drawings are ready for review — ${projectRef}`; emailHtml = freeRevisionEmailHtml(clientName, portalUrl, true, dwgDownloadUrl, projectRef);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     } else if (!effectiveFirstIssue && variationLink) {
-      deliveryType = 'variation_payment';
-      paymentLink = variationLink;
-      emailSubject = `Your updated plans are ready — payment required — ${projectRef}`;
-      emailHtml = paymentEmailHtml(clientName, variationLink, isWD, projectRef);
+      deliveryType = 'variation_payment'; paymentLink = variationLink;
+      emailSubject = `Your updated plans are ready — payment required — ${projectRef}`; emailHtml = paymentEmailHtml(clientName, variationLink, isWD, projectRef);
       await supabase.from('projects').update({ stripe_payment_link: variationLink, monday_item_id: String(pulseId), locked: true }).eq('id', project.id);
     } else if (effectiveFirstIssue && !isWD && !partialPayment) {
       deliveryType = 'pr_first_free';
-      emailSubject = `Your plans are ready for review — ${projectRef}`;
-      emailHtml = firstDeliveryEmailHtml(clientName, portalUrl, projectRef);
+      emailSubject = `Your plans are ready for review — ${projectRef}`; emailHtml = firstDeliveryEmailHtml(clientName, portalUrl, projectRef);
       await supabase.from('projects').update({ monday_item_id: String(pulseId), locked: false }).eq('id', project.id);
     } else {
       deliveryType = isWD ? 'wd_free_revision' : 'pr_free_revision';
@@ -358,7 +348,7 @@ router.post('/webhook', async (req, res) => {
     await sendEmail(clientEmail, emailSubject, emailHtml);
     const smsMessage = effectiveFirstIssue
       ? `Hi ${clientName}, we are pleased to advise that your drawings are ready to be collected. You should have received an email by now. Should you have any questions, please dont hesitate to contact us. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.`
-      : isWD ? `Hi ${clientName}, your updated plans were just emailed to you. If you need anything else, please let us know. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.` : `Hi ${clientName}, your updated plans were just emailed to you. Looking forward to your feedback with further comments or your approval to proceed to the final drawings. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.`;
+      : isWD ? `Hi ${clientName}, we've emailed you a link to review your updated plans on the portal. If you need anything else, please let us know. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.` : `Hi ${clientName}, we've emailed you a link to review your updated plans on the portal. Looking forward to your feedback with further comments or your approval to proceed to the final drawings. Have a lovely day. Sincerely, XPRESSDRAFT TEAM - No reply.`;
     await sendClientSms(project.client?.phone, smsMessage);
     await supabase.from('deliveries').insert({
       project_id: project.id,
@@ -509,7 +499,7 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     if (!pdfBuffer) return res.status(400).json({ error: 'PDF required' });
     const { data: project } = await supabase
       .from('projects')
-      .select('*, client:users!projects_client_id_fkey(id, name, email)')
+      .select('*, client:users!projects_client_id_fkey(id, name, email), contractor:users!projects_contractor_id_fkey(id, name, email)')
       .eq('id', projectId)
       .single();
     if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -519,23 +509,30 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     const fileName = `${jobNumber}-Markup-${Date.now()}.pdf`;
     const FormDataNode = require('form-data');
     const axios = require('axios');
+    const { logInstructionEntry } = require('../utils/instructionsLog');
     const mondayForm = new FormDataNode();
-    mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id } }`);
+    mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id column_values(ids: ["file_mkzh1knp"]) { value } } }`);
     mondayForm.append('variables', JSON.stringify({ file: null }));
     mondayForm.append('map', JSON.stringify({ file: ['variables.file'] }));
     mondayForm.append('file', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
     const uploadRes = await axios.post('https://api.monday.com/v2/file', mondayForm, {
       headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...mondayForm.getHeaders() }
     });
-    console.log('Monday file upload result:', JSON.stringify(uploadRes.data));
     console.log(`PDF uploaded to Monday for item ${project.monday_item_id}`);
+    // Log this directly rather than relying on Monday's own webhook to
+    // report it back — confirmed unreliable for API-driven uploads.
+    try {
+      const colVal = uploadRes?.data?.data?.add_file_to_column?.column_values?.[0]?.value;
+      const files = colVal ? (JSON.parse(colVal)?.files || []) : [];
+      const newest = files[files.length - 1];
+      if (newest) await logInstructionEntry(project.id, { source: 'client', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${newest.assetId}/${newest.name}` });
+    } catch (logErr) { console.error('Instructions log error:', logErr.message); }
     const moveResult = await mondayApi(`mutation {
       move_item_to_group(
         item_id: ${project.monday_item_id},
         group_id: "group_title"
       ) { id }
     }`);
-    console.log('Move result:', JSON.stringify(moveResult?.errors || moveResult?.data));
     const statusResult = await mondayApi(`mutation {
       change_column_value(
         board_id: ${process.env.MONDAY_BOARD_ID},
@@ -559,6 +556,13 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
       </div>`
     });
     console.log(`Submission notification sent for ${jobNumber}`);
+    if (project.contractor?.email) {
+      await resendClient.emails.send({
+        from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>', to: project.contractor.email,
+        subject: `Client markup submitted — ${jobNumber}`,
+        html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;"><h2 style="color:#2A2B29;">Client markup submitted</h2><p style="color:#5E635B;font-size:15px;line-height:1.8;">Hi ${project.contractor.name},<br/><br/><strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>. Please check Monday for the details.</p></div>`
+      });
+    }
     if (project.client?.email) {
       await resendClient.emails.send({
         from: 'Xpress Draft <noreply@xpressdraft.com.au>', to: project.client.email, cc: 'info@xpressdraft.com.au',
