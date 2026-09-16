@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabase } = require('../db');
 const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
+const { rehostMondayAsset } = require('../utils/mondayFileRehost');
 
 const COL = {
   instructionsText: 'text_mkzg2e0',
@@ -63,10 +64,6 @@ router.post('/instructions-updated', async (req, res) => {
     let changed = false;
 
     if (textVal) {
-      // Guard against duplicate webhook deliveries (Monday retries, or two
-      // webhooks accidentally scoped to the same column) — skip if the
-      // most recent text entry for this project already has this exact
-      // content.
       const { data: lastEntry } = await supabase
         .from('job_instructions').select('content').eq('project_id', project.id).eq('content_type', 'text')
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -77,8 +74,6 @@ router.post('/instructions-updated', async (req, res) => {
           project_id: project.id, source: 'xpressdraft', content_type: 'text', content: textVal, revision_label: revisionLabel
         });
         changed = true;
-        // Notify the assigned contractor directly — the in-portal badge alone
-        // isn't enough to guarantee they see it promptly.
         try {
           const { data: fullProject } = await supabase
             .from('projects').select('contractor_id, job_number, site_address, name').eq('id', project.id).single();
@@ -109,10 +104,18 @@ router.post('/instructions-updated', async (req, res) => {
       const { data: existing } = await supabase
         .from('job_instructions').select('id').eq('project_id', project.id).eq('asset_id', String(f.assetId)).maybeSingle();
       if (existing) continue;
+      // Re-host on our own storage — Monday's own link requires a logged-in
+      // Monday session, which contractors and clients don't have.
+      let fileUrl;
+      try {
+        fileUrl = await rehostMondayAsset(f.assetId, f.name, project.id);
+      } catch (rehostErr) {
+        console.error('Rehost error for asset', f.assetId, rehostErr.message);
+        continue;
+      }
       await supabase.from('job_instructions').insert({
         project_id: project.id, source: 'xpressdraft', content_type: 'file',
-        file_name: f.name, asset_id: String(f.assetId), revision_label: revisionLabel,
-        file_url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${f.assetId}/${f.name}`
+        file_name: f.name, asset_id: String(f.assetId), revision_label: revisionLabel, file_url: fileUrl
       });
       changed = true;
     }
