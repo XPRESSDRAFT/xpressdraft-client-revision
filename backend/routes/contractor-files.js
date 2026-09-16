@@ -3,9 +3,25 @@ const router = express.Router();
 const { supabase } = require('../db');
 const { auth } = require('../middleware/auth');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
 const axios = require('axios');
 const FormDataNode = require('form-data');
+
+// Wraps a Multer middleware so a file-too-large (or any Multer) error
+// returns a clean JSON response instead of an unhandled crash — Multer
+// errors happen before the route handler runs, so a route's own
+// try/catch never sees them otherwise.
+function wrapUpload(multerMiddleware) {
+  return (req, res, next) => {
+    multerMiddleware(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File is too large — the current limit is 500MB (Monday.com\'s own maximum).' });
+        return res.status(400).json({ error: err.message || 'Upload failed' });
+      }
+      next();
+    });
+  };
+}
 
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
 const COL = {
@@ -144,7 +160,7 @@ router.get('/:jobId/status', auth, async (req, res) => {
   }
 });
 
-router.post('/:jobId/working', auth, upload.single('file'), async (req, res) => {
+router.post('/:jobId/working', auth, wrapUpload(upload.single('file')), async (req, res) => {
   try {
     if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
     if (!req.file) return res.status(400).json({ error: 'File required' });
@@ -178,7 +194,7 @@ router.post('/:jobId/working', auth, upload.single('file'), async (req, res) => 
   }
 });
 
-router.post('/:jobId/delivery', auth, upload.array('files', 5), async (req, res) => {
+router.post('/:jobId/delivery', auth, wrapUpload(upload.array('files', 5)), async (req, res) => {
   try {
     if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'At least one file required' });
