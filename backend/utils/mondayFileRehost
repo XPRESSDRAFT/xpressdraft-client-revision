@@ -1,0 +1,36 @@
+const { supabase } = require('../db');
+const { isLargeFile, uploadToR2 } = require('./r2Storage');
+
+async function mondayApiCall(query) {
+  const res = await fetch('https://api.monday.com/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': process.env.MONDAY_API_TOKEN },
+    body: JSON.stringify({ query })
+  });
+  return res.json();
+}
+
+// Downloads a Monday asset and re-hosts it on our own storage. Monday's
+// own file URLs require a logged-in Monday session to open — useless for
+// contractors and clients, who don't have Monday accounts at all.
+async function rehostMondayAsset(assetId, fileName, projectId) {
+  const assetData = await mondayApiCall(`{ assets(ids: [${assetId}]) { public_url } }`);
+  const publicUrl = assetData?.data?.assets?.[0]?.public_url;
+  if (!publicUrl) throw new Error('Could not get Monday asset URL');
+
+  const fileRes = await fetch(publicUrl);
+  const buffer = Buffer.from(await fileRes.arrayBuffer());
+  const contentType = fileRes.headers.get('content-type') || 'application/octet-stream';
+  const storedName = `${Date.now()}-${fileName.replace(/\s+/g, '_')}`;
+
+  if (isLargeFile(buffer.length)) {
+    return await uploadToR2(buffer, storedName, contentType);
+  }
+  const path = `instructions/${projectId}/${storedName}`;
+  const { error } = await supabase.storage.from('drawings').upload(path, buffer, { contentType, upsert: false });
+  if (error) throw error;
+  const { data: signedData } = await supabase.storage.from('drawings').createSignedUrl(path, 365 * 24 * 60 * 60);
+  return signedData?.signedUrl;
+}
+
+module.exports = { rehostMondayAsset };
