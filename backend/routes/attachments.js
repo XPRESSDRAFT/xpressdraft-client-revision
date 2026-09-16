@@ -7,6 +7,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 const axios = require('axios');
 const FormDataNode = require('form-data');
 const { logInstructionEntry } = require('../utils/instructionsLog');
+const { rehostMondayAsset } = require('../utils/mondayFileRehost');
 
 const INSTRUCTIONS_FILE_COL = 'file_mkzh1knp';
 
@@ -48,7 +49,10 @@ router.post('/:projectId', auth, upload.single('file'), async (req, res) => {
       const colVal = uploadResult?.data?.add_file_to_column?.column_values?.[0]?.value;
       const files = colVal ? (JSON.parse(colVal)?.files || []) : [];
       const newest = files[files.length - 1];
-      if (newest) await logInstructionEntry(project.id, { source: req.user.role === 'client' ? 'client' : 'xpressdraft', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${newest.assetId}/${newest.name}` });
+      if (newest) {
+        const rehostedUrl = await rehostMondayAsset(newest.assetId, newest.name, project.id).catch(e => { console.error('Rehost error:', e.message); return null; });
+        if (rehostedUrl) await logInstructionEntry(project.id, { source: req.user.role === 'client' ? 'client' : 'xpressdraft', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: rehostedUrl });
+      }
     } catch (logErr) { console.error('Instructions log error:', logErr.message); }
 
     res.json({ ok: true });
