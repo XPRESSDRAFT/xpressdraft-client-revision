@@ -510,6 +510,7 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
     const FormDataNode = require('form-data');
     const axios = require('axios');
     const { logInstructionEntry } = require('../utils/instructionsLog');
+    const { rehostMondayAsset } = require('../utils/mondayFileRehost');
     const mondayForm = new FormDataNode();
     mondayForm.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "file_mkzh1knp", file: $file) { id column_values(ids: ["file_mkzh1knp"]) { value } } }`);
     mondayForm.append('variables', JSON.stringify({ file: null }));
@@ -525,23 +526,13 @@ router.post('/submit-markup', auth, upload.single('pdf'), async (req, res) => {
       const colVal = uploadRes?.data?.data?.add_file_to_column?.column_values?.[0]?.value;
       const files = colVal ? (JSON.parse(colVal)?.files || []) : [];
       const newest = files[files.length - 1];
-      if (newest) await logInstructionEntry(project.id, { source: 'client', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: `https://xpressdraft.monday.com/protected_static/10128130/resources/${newest.assetId}/${newest.name}` });
+      if (newest) {
+        const rehostedUrl = await rehostMondayAsset(newest.assetId, newest.name, project.id).catch(e => { console.error('Rehost error:', e.message); return null; });
+        if (rehostedUrl) await logInstructionEntry(project.id, { source: 'client', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: rehostedUrl });
+      }
     } catch (logErr) { console.error('Instructions log error:', logErr.message); }
-    const moveResult = await mondayApi(`mutation {
-      move_item_to_group(
-        item_id: ${project.monday_item_id},
-        group_id: "group_title"
-      ) { id }
-    }`);
-    const statusResult = await mondayApi(`mutation {
-      change_column_value(
-        board_id: ${process.env.MONDAY_BOARD_ID},
-        item_id: ${project.monday_item_id},
-        column_id: "${COL.deliveryStatus}",
-        value: "{\\"index\\":5}"
-      ) { id }
-    }`);
-    console.log('Status reset result:', JSON.stringify(statusResult?.errors || statusResult?.data));
+    const moveResult = await mondayApi(`mutation { move_item_to_group(item_id: ${project.monday_item_id}, group_id: "group_title") { id } }`);
+    const statusResult = await mondayApi(`mutation { change_column_value(board_id: ${process.env.MONDAY_BOARD_ID}, item_id: ${project.monday_item_id}, column_id: "${COL.deliveryStatus}", value: "{\\"index\\":5}") { id } }`);
     await supabase.from('projects').update({ locked: true }).eq('id', project.id);
     console.log('Project locked');
     const resendClient = new Resend(process.env.RESEND_API_KEY);
