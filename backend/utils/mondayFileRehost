@@ -21,7 +21,8 @@ async function rehostMondayAsset(assetId, fileName, projectId) {
   const fileRes = await fetch(publicUrl);
   const buffer = Buffer.from(await fileRes.arrayBuffer());
   const contentType = fileRes.headers.get('content-type') || 'application/octet-stream';
-  const storedName = `${Date.now()}-${fileName.replace(/\s+/g, '_')}`;
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storedName = `${Date.now()}-${safeName}`;
 
   if (isLargeFile(buffer.length)) {
     return await uploadToR2(buffer, storedName, contentType);
