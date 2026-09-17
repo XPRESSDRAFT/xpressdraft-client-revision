@@ -175,7 +175,7 @@ router.post('/:jobId/working', auth, wrapUpload(upload.single('file')), async (r
       .from('contractor_uploads').select('working_file_uploaded_at, working_file_name')
       .eq('project_id', job.project.id).eq('stage', stageKey).eq('revision_letter', letter).maybeSingle();
     if (existingUpload?.working_file_uploaded_at) {
-      return res.status(409).json({ error: `A working file (${existingUpload.working_file_name}) was already uploaded for this revision. To replace it, please contact the Xpress Draft management team first — files on Monday must be removed manually before a new one is added.` });
+      return res.status(409).json({ error: `A working file (${existingUpload.working_file_name}) was already uploaded for this revision. Use "Remove" to delete it first if you need to upload a different file.` });
     }
 
     const columnId = pickWorkingColumn(stageKey, letter);
@@ -209,7 +209,7 @@ router.post('/:jobId/delivery', auth, wrapUpload(upload.array('files', 5)), asyn
       .from('contractor_uploads').select('delivery_file_uploaded_at, delivery_file_names')
       .eq('project_id', job.project.id).eq('stage', stageKey).eq('revision_letter', letter).maybeSingle();
     if (existingUpload?.delivery_file_uploaded_at) {
-      return res.status(409).json({ error: `Delivery file(s) (${(existingUpload.delivery_file_names||[]).join(', ')}) were already uploaded for this revision. To replace them, please contact the Xpress Draft management team first — files on Monday must be removed manually before new ones are added.` });
+      return res.status(409).json({ error: `Delivery file(s) (${(existingUpload.delivery_file_names||[]).join(', ')}) were already uploaded for this revision. Use "Remove" to delete them first if you need to upload different files.` });
     }
 
     const ext = (name) => (name.split('.').pop() || '').toLowerCase();
@@ -254,6 +254,40 @@ router.post('/:jobId/storage-confirm', auth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Storage confirm error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:jobId/working', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const job = await loadJobAndProject(req.params.jobId, req.user.id);
+    if (!job || !job.project?.monday_item_id) return res.status(404).json({ error: 'Job or Monday link not found' });
+    const { stageKey, letter } = await getMondayContext(job.project.monday_item_id);
+    const columnId = pickWorkingColumn(stageKey, letter);
+    await mondayApi(`mutation { change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${job.project.monday_item_id}, column_id: "${columnId}", value: "{\\"clear_all\\":true}") { id } }`);
+    await supabase.from('contractor_uploads').update({ working_file_uploaded_at: null, working_file_name: null })
+      .eq('project_id', job.project.id).eq('stage', stageKey).eq('revision_letter', letter);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Remove working file error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:jobId/delivery', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const job = await loadJobAndProject(req.params.jobId, req.user.id);
+    if (!job || !job.project?.monday_item_id) return res.status(404).json({ error: 'Job or Monday link not found' });
+    const { stageKey, letter } = await getMondayContext(job.project.monday_item_id);
+    const columnId = pickDeliveryColumn(stageKey, letter);
+    await mondayApi(`mutation { change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${job.project.monday_item_id}, column_id: "${columnId}", value: "{\\"clear_all\\":true}") { id } }`);
+    await supabase.from('contractor_uploads').update({ delivery_file_uploaded_at: null, delivery_file_names: null })
+      .eq('project_id', job.project.id).eq('stage', stageKey).eq('revision_letter', letter);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Remove delivery file error:', err);
     res.status(500).json({ error: err.message });
   }
 });
