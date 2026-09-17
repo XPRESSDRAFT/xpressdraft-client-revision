@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 
 const B = { orange:"#EA672F", black:"#2A2B29", cream:"#F3EAE5", tone1:"#D2CAC4", tone2:"#A9A09B", black1:"#42453C", black2:"#5E635B", white:"#ffffff", green:"#2E5C10", greenBg:"#EAF3DE" };
 
-function ActionRow({ label, hint, done, doneLabel, busy, onTrigger, triggerLabel, isLink, linkHref }) {
+function ActionRow({ label, hint, done, doneLabel, busy, removing, onTrigger, onRemove, triggerLabel, isLink, linkHref }) {
   return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderBottom:"1px solid "+B.cream, gap:12 }}>
       <div style={{ flex:1 }}>
@@ -11,7 +11,10 @@ function ActionRow({ label, hint, done, doneLabel, busy, onTrigger, triggerLabel
         {isLink && linkHref && <a href={linkHref} target="_blank" rel="noreferrer" style={{ fontSize:12, color:B.orange }}>Open backup storage drive →</a>}
       </div>
       {done ? (
-        <span style={{ fontSize:12, padding:"6px 14px", borderRadius:20, background:B.greenBg, color:B.green, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 }}>✓ {doneLabel}</span>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:12, padding:"6px 14px", borderRadius:20, background:B.greenBg, color:B.green, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 }}>✓ {doneLabel}</span>
+          {onRemove && <button onClick={onRemove} disabled={removing} style={{ padding:"5px 10px", background:"none", border:"1px solid #F7C1C1", color:"#8B2020", borderRadius:7, cursor:removing?"default":"pointer", fontSize:11, fontFamily:"Manrope,sans-serif" }}>{removing?"...":"Remove"}</button>}
+        </div>
       ) : (
         <button onClick={onTrigger} disabled={busy} style={{ padding:"7px 16px", background:busy?B.tone1:B.orange, color:B.white, border:"none", borderRadius:7, cursor:busy?"default":"pointer", fontSize:13, fontFamily:"Manrope,sans-serif", fontWeight:600 }}>
           {busy?"Uploading...":triggerLabel}
@@ -25,6 +28,7 @@ export default function ContractorUpload({ jobId, apiBase, token, stage, revisio
   const [status,setStatus]=useState(null);
   const [loading,setLoading]=useState(true);
   const [busyAction,setBusyAction]=useState(null);
+  const [removingAction,setRemovingAction]=useState(null);
   const workingInputRef=useRef(null);
   const deliveryInputRef=useRef(null);
 
@@ -72,6 +76,17 @@ export default function ContractorUpload({ jobId, apiBase, token, stage, revisio
     setBusyAction(null);
   };
 
+  const removeUpload=async(type)=>{
+    if(!window.confirm("Remove this file? This cannot be undone, and you'll need to upload a new one."))return;
+    setRemovingAction(type);
+    try{
+      const r=await fetch(apiBase+"/api/contractor-files/"+jobId+"/"+type,{method:"DELETE",headers:{Authorization:"Bearer "+token}});
+      if(!r.ok)throw new Error((await r.json()).error||"Failed to remove");
+      load();
+    }catch(e){alert("Failed to remove file: "+e.message);}
+    setRemovingAction(null);
+  };
+
   if(loading)return <div style={{padding:"1.25rem",color:B.black2,fontSize:13}}>Loading upload status...</div>;
   if(!status)return null;
 
@@ -85,10 +100,10 @@ export default function ContractorUpload({ jobId, apiBase, token, stage, revisio
       </div>
       <p style={{ fontSize:12, color:B.black2, margin:"0 0 8px" }}>All three actions below must be completed before this revision moves into review.</p>
 
-      <ActionRow label="Working file" hint="PLN / Revit file for this revision" done={status.workingFileDone} doneLabel={status.workingFileName||"Uploaded"} busy={busyAction==="working"} triggerLabel="Upload file" onTrigger={()=>workingInputRef.current?.click()} />
+      <ActionRow label="Working file" hint="PLN / Revit file for this revision" done={status.workingFileDone} doneLabel={status.workingFileName||"Uploaded"} busy={busyAction==="working"} removing={removingAction==="working"} triggerLabel="Upload file" onTrigger={()=>workingInputRef.current?.click()} onRemove={()=>removeUpload("working")} />
       <input ref={workingInputRef} type="file" style={{display:"none"}} onChange={e=>uploadWorking(e.target.files[0])} />
 
-      <ActionRow label="Delivery file(s)" hint={stage==="working_drawings"?"Requires a PDF and a DWG for client delivery":"Requires a PDF for client delivery"} done={status.deliveryFileDone} doneLabel={status.deliveryFileNames?.length?status.deliveryFileNames.join(", "):"Uploaded"} busy={busyAction==="delivery"} triggerLabel="Upload file(s)" onTrigger={()=>deliveryInputRef.current?.click()} />
+      <ActionRow label="Delivery file(s)" hint={stage==="working_drawings"?"Requires a PDF and a DWG for client delivery":"Requires a PDF for client delivery"} done={status.deliveryFileDone} doneLabel={status.deliveryFileNames?.length?status.deliveryFileNames.join(", "):"Uploaded"} busy={busyAction==="delivery"} removing={removingAction==="delivery"} triggerLabel="Upload file(s)" onTrigger={()=>deliveryInputRef.current?.click()} onRemove={()=>removeUpload("delivery")} />
       <input ref={deliveryInputRef} type="file" multiple style={{display:"none"}} onChange={e=>uploadDelivery(e.target.files)} />
 
       <ActionRow label="Backup storage" hint="Upload all files here" done={status.storageConfirmed} doneLabel="Confirmed" busy={busyAction==="storage"} triggerLabel="Mark as done" onTrigger={confirmStorage} isLink={!status.storageConfirmed} linkHref={status.storageLink} />
