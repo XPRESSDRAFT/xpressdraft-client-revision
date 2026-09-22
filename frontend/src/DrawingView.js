@@ -45,9 +45,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [canvasSize,setCanvasSize]=useState({w:1,h:1});
   const [showClearConfirm,setShowClearConfirm]=useState(false);
   const [selectedPathId,setSelectedPathId]=useState(null);
+  const [,forceTick]=useState(0);
   const drawingRef=useRef(false);
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
+  const dragInfoRef=useRef(null);
   const pathsRef=useRef([]);
   const renderTaskRef=useRef(null);
   const isTeam=user.role==="team"||user.role==="admin"||user.role==="contractor";
@@ -109,7 +111,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
     cw=cw||ctx.canvas.width;ch=ch||ctx.canvas.height;
     ctx.save();ctx.strokeStyle=p.color;ctx.lineWidth=p.width*cw;ctx.lineCap="round";ctx.lineJoin="round";
     if(p.tool==="hl"){ctx.globalAlpha=0.35;}
-    if(p.tool==="textlabel"){ctx.fillStyle=p.color;ctx.font="14px Manrope,sans-serif";ctx.fillText(p.text,p.pts[0].x*cw,p.pts[0].y*ch);}
+    if(p.tool==="textlabel"){ctx.fillStyle=p.color;ctx.font="14px Manrope,sans-serif";const tx=p.pts[0].x*cw,ty=p.pts[0].y*ch;ctx.translate(tx,ty);ctx.rotate((p.rotation||0)*Math.PI/180);ctx.fillText(p.text,0,0);}
     else if(p.tool==="arrow"){drawArrow(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);}
     else if(p.tool==="cloud"){drawCloud(ctx,p.pts[0].x*cw,p.pts[0].y*ch,p.pts[1].x*cw,p.pts[1].y*ch,p.color,p.width*cw);}
     else if(p.tool==="rect"){ctx.strokeRect(p.pts[0].x*cw,p.pts[0].y*ch,(p.pts[1].x-p.pts[0].x)*cw,(p.pts[1].y-p.pts[0].y)*ch);}
@@ -149,12 +151,19 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   const onMouseDown=e=>{
     if(tool==="comment"){const r=markupRef.current.getBoundingClientRect();setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});return;}
-    if(tool==="select"){const nx=(e.clientX-markupRef.current.getBoundingClientRect().left)/markupRef.current.width;const ny=(e.clientY-markupRef.current.getBoundingClientRect().top)/markupRef.current.height;const hit=pathsRef.current.slice().reverse().find(p=>hitTest(p,nx,ny));setSelectedPathId(hit?hit.id:null);return;}
+    if(tool==="select"){const nx=(e.clientX-markupRef.current.getBoundingClientRect().left)/markupRef.current.width;const ny=(e.clientY-markupRef.current.getBoundingClientRect().top)/markupRef.current.height;const hit=pathsRef.current.slice().reverse().find(p=>hitTest(p,nx,ny));setSelectedPathId(hit?hit.id:null);dragInfoRef.current=hit?{id:hit.id,startNorm:{x:nx,y:ny},originalPts:hit.pts.map(pt=>({x:pt.x,y:pt.y}))}:null;return;}
     drawingRef.current=true;const norm=getNorm(e);startXY.current=norm;curPath.current=[norm];
-    if(tool==="text"){const t=prompt("Enter note:");if(t){const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,id:Date.now()};const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}drawingRef.current=false;}
+    if(tool==="text"){const t=prompt("Enter note:");if(t){const rotInput=prompt("Rotate text? Enter angle in degrees (0 = horizontal):","0");const rotation=parseFloat(rotInput)||0;const p={tool:"textlabel",color,width:strokeW/markupRef.current.width,pts:[norm],text:t,rotation,id:Date.now()};const u=[...pathsRef.current,p];pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}drawingRef.current=false;}
   };
 
   const onMouseMove=e=>{
+    if(tool==="select"&&dragInfoRef.current){
+      const norm=getNorm(e);
+      const dx=norm.x-dragInfoRef.current.startNorm.x,dy=norm.y-dragInfoRef.current.startNorm.y;
+      const u=pathsRef.current.map(p=>p.id===dragInfoRef.current.id?{...p,pts:dragInfoRef.current.originalPts.map(pt=>({x:pt.x+dx,y:pt.y+dy}))}:p);
+      pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();forceTick(t=>t+1);
+      return;
+    }
     if(!drawingRef.current)return;const norm=getNorm(e);const{x,y}=getXY(e);
     const ctx=markupRef.current.getContext("2d");const cw=markupRef.current.width||1;const ch=markupRef.current.height||1;
     if(tool==="pen"||tool==="hl"){
@@ -167,6 +176,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   };
 
   const onMouseUp=e=>{
+    if(tool==="select"){dragInfoRef.current=null;return;}
     if(!drawingRef.current)return;drawingRef.current=false;const norm=getNorm(e);const cw=markupRef.current.width||1;let p;
     if(tool==="pen"||tool==="hl")p={tool,color,width:(tool==="hl"?strokeW*6:strokeW)/cw,pts:[...curPath.current],id:Date.now()};
     else if(tool==="arrow")p={tool:"arrow",color,width:strokeW/cw,pts:[startXY.current,norm],id:Date.now()};
@@ -178,6 +188,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
 
   useEffect(()=>{redraw();},[selectedPathId]);
   const deleteSelectedPath=()=>{const u=pathsRef.current.filter(p=>p.id!==selectedPathId);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};setSelectedPathId(null);redraw();};
+  const rotateSelectedPath=()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return;const rotInput=prompt("Rotation angle in degrees:",String(sel.rotation||0));if(rotInput===null)return;const rotation=parseFloat(rotInput)||0;const u=pathsRef.current.map(p=>p.id===selectedPathId?{...p,rotation}:p);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();};
 
   const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
@@ -253,7 +264,7 @@ const generateMarkupPdf=async()=>{
       const pg=await pdfDoc.getPage(p);const vp=pg.getViewport({scale:2});
       const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;const ctx=c.getContext("2d");
       await pg.render({canvasContext:ctx,viewport:vp}).promise;
-      (allMarkupsRef.current[p]||[]).forEach(path=>{ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*vp.width;ctx.lineCap="round";ctx.lineJoin="round";if(path.tool==="hl")ctx.globalAlpha=0.35;if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";ctx.fillText(path.text,path.pts[0].x*vp.width,path.pts[0].y*vp.height);}else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);}else if(path.tool==="arrow"){drawArrow(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else if(path.tool==="cloud"){drawCloud(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));ctx.stroke();}ctx.restore();});
+      (allMarkupsRef.current[p]||[]).forEach(path=>{ctx.save();ctx.strokeStyle=path.color;ctx.lineWidth=path.width*vp.width;ctx.lineCap="round";ctx.lineJoin="round";if(path.tool==="hl")ctx.globalAlpha=0.35;if(path.tool==="textlabel"){ctx.fillStyle=path.color;ctx.font="28px sans-serif";const tx=path.pts[0].x*vp.width,ty=path.pts[0].y*vp.height;ctx.translate(tx,ty);ctx.rotate((path.rotation||0)*Math.PI/180);ctx.fillText(path.text,0,0);}else if(path.tool==="rect"){ctx.strokeRect(path.pts[0].x*vp.width,path.pts[0].y*vp.height,(path.pts[1].x-path.pts[0].x)*vp.width,(path.pts[1].y-path.pts[0].y)*vp.height);}else if(path.tool==="arrow"){drawArrow(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else if(path.tool==="cloud"){drawCloud(ctx,path.pts[0].x*vp.width,path.pts[0].y*vp.height,path.pts[1].x*vp.width,path.pts[1].y*vp.height,path.color,path.width*vp.width);}else{ctx.beginPath();path.pts.forEach((pt,i)=>i?ctx.lineTo(pt.x*vp.width,pt.y*vp.height):ctx.moveTo(pt.x*vp.width,pt.y*vp.height));ctx.stroke();}ctx.restore();});
       allPins.filter(cc=>(cc.page||1)===p).forEach(cc=>{const gi=allPins.indexOf(cc);const x=cc.pin_x*vp.width,y=cc.pin_y*vp.height;ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fillStyle="#E24B4A";ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 18px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(gi+1,x,y);});
       const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();const ratio=Math.min(pw/vp.width,ph/vp.height);
       if(!fp)pdf.addPage();pdf.addImage(c.toDataURL("image/jpeg",0.9),"JPEG",0,0,vp.width*ratio,vp.height*ratio);fp=false;
@@ -396,11 +407,11 @@ const generateMarkupPdf=async()=>{
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
             <canvas ref={canvasRef} style={{display:"block"}}/>
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
-              onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;}}/>
+              onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;dragInfoRef.current=null;}}/>
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*canvasSize.w,top:pendingPin.fy*canvasSize.h,transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>+</div>}
-                {selectedPathId&&(()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return null;return <div key="del-btn" style={{position:"absolute",left:sel.pts[0].x*canvasSize.w,top:sel.pts[0].y*canvasSize.h,transform:"translate(4px,-24px)",zIndex:20,pointerEvents:"all"}}><button onClick={deleteSelectedPath} style={{background:"#E24B4A",color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Delete</button></div>;})()}
+                {selectedPathId&&(()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return null;return <div key="del-btn" style={{position:"absolute",left:sel.pts[0].x*canvasSize.w,top:sel.pts[0].y*canvasSize.h,transform:"translate(4px,-24px)",zIndex:20,pointerEvents:"all",display:"flex",gap:4}}>{sel.tool==="textlabel"&&<button onClick={rotateSelectedPath} style={{background:B.orange,color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Rotate</button>}<button onClick={deleteSelectedPath} style={{background:"#E24B4A",color:"#fff",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11,fontFamily:"Manrope,sans-serif",fontWeight:600}}>Delete</button></div>;})()}
                 {comments.filter(c=>c.pin_x!=null&&(c.page||1)===page).map((c)=>{
                   const ct=CTYPES[c.type]||CTYPES.issue;
                   const gi=comments.filter(cc=>cc.pin_x!=null).indexOf(c);
