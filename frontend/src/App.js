@@ -87,6 +87,7 @@ function VerifyPage({onLogin}){
 }
 function ProjectsPage({user,onLogout}){
   const [projects,setProjects]=useState([]);
+  const [projectSearch,setProjectSearch]=useState("");
   const [loading,setLoading]=useState(true);
   const [showNew,setShowNew]=useState(false);
   const [newName,setNewName]=useState("");
@@ -306,7 +307,8 @@ function ProjectsPage({user,onLogout}){
           </div>
         ):(
           <div style={{display:"grid",gap:12}}>
-            {projects.map(p=>{
+            <input style={{...inputSt,marginBottom:4}} placeholder="Search by job number, address, or name..." value={projectSearch} onChange={e=>setProjectSearch(e.target.value)}/>
+            {projects.filter(p=>{const q=projectSearch.trim().toLowerCase();if(!q)return true;return (p.job_number||"").toLowerCase().includes(q)||(p.site_address||"").toLowerCase().includes(q)||(p.name||"").toLowerCase().includes(q);}).map(p=>{
               const rs=p.revisionSummary;
               const totalComments=(p.drawings||[]).reduce((a,d)=>a+(d.comments||[]).length,0);
               return(
@@ -368,9 +370,7 @@ function AdminPage({user,onBack}){
     }catch(e){setMsg("Error: "+e.message);}};
   const removeUser=async(id,name)=>{
     if(!window.confirm("Remove "+name+"?"))return;
-    try{
-      await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+id,{method:"DELETE",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}});setUsers(users.filter(u=>u.id!==id));setMsg(name+" removed.");
-    }catch(e){setMsg("Failed to remove user");}
+    try{await fetch((process.env.REACT_APP_API_URL||"")+"/api/users/"+id,{method:"DELETE",headers:{Authorization:"Bearer "+localStorage.getItem("xpd_token")}});setUsers(users.filter(u=>u.id!==id));setMsg(name+" removed.");}catch(e){setMsg("Failed to remove user");}
   };
   const resendInvite=async(id,name)=>{
     try{await api.resendInvite(id);setMsg("Invite resent to "+name+".");}catch(e){setMsg("Failed to resend invite");}
