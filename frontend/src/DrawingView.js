@@ -50,6 +50,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const curPath=useRef([]);
   const startXY=useRef({x:0,y:0});
   const dragInfoRef=useRef(null);
+  const panInfoRef=useRef(null);
   const pathsRef=useRef([]);
   const renderTaskRef=useRef(null);
   const isTeam=user.role==="team"||user.role==="admin"||user.role==="contractor";
@@ -150,6 +151,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   },[onWheel]);
 
   const onMouseDown=e=>{
+    if(tool==="pan"){panInfoRef.current={startX:e.clientX,startY:e.clientY,scrollLeft:wrapRef.current.scrollLeft,scrollTop:wrapRef.current.scrollTop};return;}
     if(tool==="comment"){const r=markupRef.current.getBoundingClientRect();setPendingPin({fx:(e.clientX-r.left)/markupRef.current.width,fy:(e.clientY-r.top)/markupRef.current.height});return;}
     if(tool==="select"){const nx=(e.clientX-markupRef.current.getBoundingClientRect().left)/markupRef.current.width;const ny=(e.clientY-markupRef.current.getBoundingClientRect().top)/markupRef.current.height;const hit=pathsRef.current.slice().reverse().find(p=>hitTest(p,nx,ny));setSelectedPathId(hit?hit.id:null);dragInfoRef.current=hit?{id:hit.id,startNorm:{x:nx,y:ny},originalPts:hit.pts.map(pt=>({x:pt.x,y:pt.y}))}:null;return;}
     drawingRef.current=true;const norm=getNorm(e);startXY.current=norm;curPath.current=[norm];
@@ -157,6 +159,11 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   };
 
   const onMouseMove=e=>{
+    if(tool==="pan"&&panInfoRef.current){
+      wrapRef.current.scrollLeft=panInfoRef.current.scrollLeft-(e.clientX-panInfoRef.current.startX);
+      wrapRef.current.scrollTop=panInfoRef.current.scrollTop-(e.clientY-panInfoRef.current.startY);
+      return;
+    }
     if(tool==="select"&&dragInfoRef.current){
       const norm=getNorm(e);
       const dx=norm.x-dragInfoRef.current.startNorm.x,dy=norm.y-dragInfoRef.current.startNorm.y;
@@ -176,6 +183,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   };
 
   const onMouseUp=e=>{
+    if(tool==="pan"){panInfoRef.current=null;return;}
     if(tool==="select"){dragInfoRef.current=null;return;}
     if(!drawingRef.current)return;drawingRef.current=false;const norm=getNorm(e);const cw=markupRef.current.width||1;let p;
     if(tool==="pen"||tool==="hl")p={tool,color,width:(tool==="hl"?strokeW*6:strokeW)/cw,pts:[...curPath.current],id:Date.now()};
@@ -351,7 +359,7 @@ const generateMarkupPdf=async()=>{
 
   const COLORS=["#EA672F","#E24B4A","#378ADD","#639922","#7F77DD","#2A2B29","#CC0000","#006600","#006600"];
   const CTYPES={issue:{label:"Issue",bg:"#FCEBEB",color:"#8B2020",dot:"#E24B4A"},info:{label:"Question",bg:"#EBF3FE",color:"#1A4A8A",dot:"#378ADD"}};
-  const cursorMap={pen:"crosshair",hl:"crosshair",arrow:"crosshair",cloud:"crosshair",rect:"crosshair",text:"text",comment:"copy",select:"default",erase:"cell"};
+  const cursorMap={pen:"crosshair",hl:"crosshair",arrow:"crosshair",cloud:"crosshair",rect:"crosshair",text:"text",comment:"copy",select:"default",erase:"cell",pan:"grab"};
 
   return(
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -371,7 +379,7 @@ const generateMarkupPdf=async()=>{
         </div>
       )}
       <div style={{background:B.white,borderBottom:"1px solid "+B.tone1,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        {[["select","ESC","Select"],["pen","Pen","Pen"],["hl","Hi","Highlight"],["arrow","Arrow","Arrow"],["cloud","Cloud","Cloud"],["rect","Rect","Rect"],["text","T","Text"],["comment","Pin","Pin"],["erase","Erase","Erase"]].map(([id,ic,title])=>(
+        {[["select","ESC","Select"],["pan","Pan","Pan"],["pen","Pen","Pen"],["hl","Hi","Highlight"],["arrow","Arrow","Arrow"],["cloud","Cloud","Cloud"],["rect","Rect","Rect"],["text","T","Text"],["comment","Pin","Pin"],["erase","Erase","Erase"]].map(([id,ic,title])=>(
           <button key={id} onClick={()=>setTool(id)} title={title}
             style={{padding:"5px 8px",border:"1px solid "+(tool===id?B.orange:B.tone1),borderRadius:6,background:tool===id?"#FEF3E8":B.white,color:tool===id?B.orange:B.black1,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:tool===id?600:400}}>
             {ic}
@@ -407,7 +415,7 @@ const generateMarkupPdf=async()=>{
           <div style={{position:"relative",boxShadow:"0 4px 24px rgba(0,0,0,0.35)"}}>
             <canvas ref={canvasRef} style={{display:"block"}}/>
             <canvas ref={markupRef} style={{position:"absolute",top:0,left:0,cursor:cursorMap[tool]||"crosshair"}}
-              onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;dragInfoRef.current=null;}}/>
+              onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={()=>{drawingRef.current=false;dragInfoRef.current=null;panInfoRef.current=null;}}/>
             <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <div style={{position:"relative",width:"100%",height:"100%",pointerEvents:"none"}}>
                 {pendingPin&&<div style={{position:"absolute",left:pendingPin.fx*canvasSize.w,top:pendingPin.fy*canvasSize.h,transform:"translate(-50%,-50%)",width:26,height:26,borderRadius:"50%",background:B.orange,border:"2px solid white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",zIndex:11,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>+</div>}
