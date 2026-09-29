@@ -178,7 +178,14 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
       ctx.strokeStyle=color;ctx.lineWidth=tool==="hl"?strokeW*6:strokeW;ctx.lineCap="round";ctx.lineJoin="round";
       const pts=curPath.current;const prev=pts[pts.length-2];
       ctx.beginPath();ctx.moveTo(prev.x*cw,prev.y*ch);ctx.lineTo(norm.x*cw,norm.y*ch);ctx.stroke();ctx.restore();
-    } else if(tool==="erase"){ctx.clearRect(x-12,y-12,24,24);}
+    } else if(tool==="erase"){
+      // Erase actually removes the matching item from the underlying
+      // data (same hit-test used by Select) — previously this only
+      // cleared pixels on the canvas bitmap, leaving the erased item's
+      // data fully intact, so it would reappear on the next redraw().
+      const hit=pathsRef.current.slice().reverse().find(p2=>hitTest(p2,norm.x,norm.y));
+      if(hit){const u=pathsRef.current.filter(p2=>p2.id!==hit.id);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();}
+    }
     else{redraw();ctx.save();ctx.strokeStyle=color;ctx.lineWidth=strokeW;ctx.lineCap="round";const sx=startXY.current.x*cw,sy=startXY.current.y*ch;if(tool==="arrow")drawArrow(ctx,sx,sy,x,y,color,strokeW);else if(tool==="cloud")drawCloud(ctx,sx,sy,x,y,color,strokeW);else if(tool==="rect")ctx.strokeRect(sx,sy,x-sx,y-sy);ctx.restore();}
   };
 
