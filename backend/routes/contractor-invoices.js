@@ -196,4 +196,38 @@ router.get('/invoices/all', auth, async (req, res) => {
   }
 });
 
+// Reads the payment status column's own settings to find the exact label
+// Monday uses for "paid", rather than guessing how it's spelled — so
+// this keeps working however that label is worded.
+async function findPaidLabel() {
+  const data = await mondayApi(`{ boards(ids: [${PAYMENT_BOARD_ID}]) { columns(ids: ["${COL.paymentStatus}"]) { settings_str } } }`);
+  const settingsStr = data?.data?.boards?.[0]?.columns?.[0]?.settings_str;
+  let labels = [];
+  try { labels = Object.values(JSON.parse(settingsStr || '{}').labels || {}).filter(Boolean); } catch (e) {}
+  const paid = labels.find(l => /paid/i.test(l) && !/unpaid|outstanding|part/i.test(l));
+  return { paid: paid || null, labels };
+}
+
+// Admin-only: marks one invoice as paid by setting its status on Monday.
+// Contractors see it as Paid in their own Payments tab, since that tab
+// always reads the live status from Monday.
+router.post('/invoices/:invoiceId/mark-paid', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { data: invoice } = await supabase
+      .from('contractor_invoices').select('id, monday_item_id').eq('id', req.params.invoiceId).single();
+    if (!invoice || !invoice.monday_item_id) return res.status(404).json({ error: 'Invoice not found, or not linked to Monday' });
+
+    const { paid, labels } = await findPaidLabel();
+    if (!paid) return res.status(400).json({ error: `Couldn't find a "Paid" option on the payment status column. Options found: ${labels.join(', ') || 'none'}.` });
+
+    const result = await mondayApi(`mutation { change_column_value(board_id: ${PAYMENT_BOARD_ID}, item_id: ${invoice.monday_item_id}, column_id: "${COL.paymentStatus}", value: ${JSON.stringify(JSON.stringify({ label: paid }))}) { id } }`);
+    if (result?.errors?.length) throw new Error(result.errors[0].message || 'Monday rejected the update');
+    res.json({ ok: true, paymentStatus: paid });
+  } catch (err) {
+    console.error('Mark invoice paid error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
