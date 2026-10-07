@@ -6,39 +6,24 @@ const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:"1px
 const inputSt={width:"100%",border:"1px solid "+B.tone1,borderRadius:7,padding:"9px 11px",fontSize:14,fontFamily:"Manrope,sans-serif",background:B.white,color:B.black,boxSizing:"border-box"};
 const OPTION_LABEL={siteVisit:"Site Visit",model3d:"3D Model",renders3d:"3D Renders"};
 const money=n=>"$"+(Number(n)||0).toLocaleString("en-AU",{minimumFractionDigits:0,maximumFractionDigits:2});
+const isPaid=s=>/paid/i.test(s||"")&&!/unpaid|outstanding|part/i.test(s||"");
 
-// Every invoice any contractor has submitted, with live payment status
-// from Monday. Mounted only when its tab is opened, so Monday isn't
-// queried every time the admin visits this page.
-function InvoicesTab({ API, token }) {
-  const [invoices,setInvoices]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState(null);
+// One list component serves both the Invoices (outstanding) and Paid tabs.
+function InvoiceList({ invoices, mode, onMarkPaid, markingId }) {
   const [search,setSearch]=useState("");
-
-  useEffect(()=>{
-    fetch(API+"/api/contractor/invoices/all",{headers:{Authorization:"Bearer "+token()}})
-      .then(r=>r.json().then(d=>({ok:r.ok,d})))
-      .then(({ok,d})=>{if(!ok)throw new Error(d.error||"Failed to load invoices");setInvoices(d.invoices||[]);setLoading(false);})
-      .catch(e=>{setError(e.message);setLoading(false);});
-  },[]);
-
   const q=search.trim().toLowerCase();
-  const shown=invoices.filter(i=>!q||(i.contractorName||"").toLowerCase().includes(q)||(i.jobRef||"").toLowerCase().includes(q));
+  const inMode=invoices.filter(i=>(mode==="paid")===isPaid(i.paymentStatus));
+  const shown=inMode.filter(i=>!q||(i.contractorName||"").toLowerCase().includes(q)||(i.jobRef||"").toLowerCase().includes(q));
   const totalEx=shown.reduce((s,i)=>s+(Number(i.amount)||0),0);
   const totalInc=shown.reduce((s,i)=>s+(Number(i.amount_gst)||0),0);
-  const isPaid=s=>/paid/i.test(s||"")&&!/unpaid|outstanding|part/i.test(s||"");
-
-  if(loading)return <div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading invoices...</div>;
-  if(error)return <div style={{textAlign:"center",padding:"3rem",color:"#8B2020",fontSize:13}}>{error}</div>;
 
   return (
     <>
       <input style={{...inputSt,marginBottom:12}} placeholder="Search by contractor or job..." value={search} onChange={e=>setSearch(e.target.value)}/>
       <div style={{fontSize:13,color:B.black2,marginBottom:14}}>
-        <strong style={{color:B.black}}>{shown.length}</strong> invoice{shown.length!==1?"s":""} · {money(totalEx)} excl. GST · {money(totalInc)} incl. GST
+        <strong style={{color:B.black}}>{shown.length}</strong> {mode==="paid"?"paid":"outstanding"} invoice{shown.length!==1?"s":""} · {money(totalEx)} excl. GST · {money(totalInc)} incl. GST
       </div>
-      {shown.length===0&&<p style={{fontSize:13,color:B.black2}}>{invoices.length===0?"No invoices have been submitted yet.":"No invoices match your search."}</p>}
+      {shown.length===0&&<p style={{fontSize:13,color:B.black2}}>{inMode.length===0?(mode==="paid"?"No invoices have been marked as paid yet.":(invoices.length===0?"No invoices have been submitted yet.":"Nothing outstanding — every invoice has been paid.")):"No invoices match your search."}</p>}
       {shown.map(i=>{
         const paid=isPaid(i.paymentStatus);
         return (
@@ -57,7 +42,10 @@ function InvoicesTab({ API, token }) {
                 {new Date(i.submitted_at).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"})}
                 {i.file_name&&<><span style={{margin:"0 6px",color:B.tone2}}>|</span>{i.file_name}</>}
               </div>
-              {i.mondayUrl&&<a href={i.mondayUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.orange,fontWeight:600,textDecoration:"none"}}>Open in Monday →</a>}
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                {i.mondayUrl&&<a href={i.mondayUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:B.orange,fontWeight:600,textDecoration:"none"}}>Open in Monday →</a>}
+                {mode==="outstanding"&&<button onClick={()=>onMarkPaid(i)} disabled={markingId===i.id} style={{...btnPrimary,background:B.green,opacity:markingId===i.id?0.6:1,cursor:markingId===i.id?"default":"pointer"}}>{markingId===i.id?"Saving...":"Mark as paid"}</button>}
+              </div>
             </div>
           </div>
         );
@@ -70,6 +58,12 @@ export default function ContractorRequestsPage({ onBack }) {
   const [tab,setTab]=useState("requests");
   const [requests,setRequests]=useState([]);
   const [loading,setLoading]=useState(true);
+  // Invoices are fetched once, the first time either invoice tab is
+  // opened (null = not loaded yet), and shared by both tabs.
+  const [invoices,setInvoices]=useState(null);
+  const [invLoading,setInvLoading]=useState(false);
+  const [invError,setInvError]=useState(null);
+  const [markingId,setMarkingId]=useState(null);
   const API=process.env.REACT_APP_API_URL||"";
   const token=()=>localStorage.getItem("xpd_token");
 
@@ -78,6 +72,27 @@ export default function ContractorRequestsPage({ onBack }) {
       .then(r=>r.json()).then(d=>{setRequests(d.requests||[]);setLoading(false);}).catch(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
+
+  const loadInvoices=()=>{
+    setInvLoading(true);setInvError(null);
+    fetch(API+"/api/contractor/invoices/all",{headers:{Authorization:"Bearer "+token()}})
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{if(!ok)throw new Error(d.error||"Failed to load invoices");setInvoices(d.invoices||[]);setInvLoading(false);})
+      .catch(e=>{setInvError(e.message);setInvLoading(false);});
+  };
+  useEffect(()=>{if((tab==="invoices"||tab==="paid")&&invoices===null&&!invLoading&&!invError)loadInvoices();},[tab]);
+
+  const markPaid=async(inv)=>{
+    if(!window.confirm("Mark this invoice as paid?\n\n"+inv.contractorName+" — "+money(inv.amount_gst)+" incl. GST\n"+inv.jobRef+"\n\nThis updates its status on Monday, and the contractor will see it as Paid in their portal."))return;
+    setMarkingId(inv.id);
+    try{
+      const r=await fetch(API+"/api/contractor/invoices/"+inv.id+"/mark-paid",{method:"POST",headers:{Authorization:"Bearer "+token()}});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||"Failed");
+      setInvoices(prev=>prev.map(x=>x.id===inv.id?{...x,paymentStatus:d.paymentStatus}:x));
+    }catch(e){alert("Failed to mark as paid: "+e.message);}
+    setMarkingId(null);
+  };
 
   const resolve=async(id,action)=>{
     try{
@@ -89,6 +104,13 @@ export default function ContractorRequestsPage({ onBack }) {
 
   const pending=requests.filter(r=>r.status==="pending");
   const resolved=requests.filter(r=>r.status!=="pending");
+  const outstandingCount=invoices?invoices.filter(i=>!isPaid(i.paymentStatus)).length:null;
+  const paidCount=invoices?invoices.filter(i=>isPaid(i.paymentStatus)).length:null;
+  const tabs=[
+    ["requests","Fee Requests"+(pending.length>0?" ("+pending.length+")":"")],
+    ["invoices","Invoices"+(outstandingCount!==null?" ("+outstandingCount+")":"")],
+    ["paid","Paid"+(paidCount!==null?" ("+paidCount+")":"")],
+  ];
 
   return (
     <div style={{minHeight:"100vh",background:B.cream,fontFamily:"Manrope,sans-serif"}}>
@@ -97,13 +119,22 @@ export default function ContractorRequestsPage({ onBack }) {
         <button onClick={onBack} style={{marginLeft:"auto",background:"none",border:"1px solid "+B.black2,color:B.tone2,padding:"5px 12px",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif"}}>Back</button>
       </nav>
       <div style={{maxWidth:700,margin:"0 auto",padding:"2rem 24px"}}>
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
-          {[["requests","Fee Requests"+(pending.length>0?" ("+pending.length+")":"")],["invoices","Invoices"]].map(([id,label])=>(
+        <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+          {tabs.map(([id,label])=>(
             <div key={id} onClick={()=>setTab(id)} style={{padding:"7px 16px",borderRadius:7,border:"1px solid "+(tab===id?B.orange:B.tone1),background:tab===id?"#FEF3E8":B.white,color:tab===id?B.orange:B.black2,cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>{label}</div>
           ))}
         </div>
 
-        {tab==="invoices"&&<InvoicesTab API={API} token={token}/>}
+        {(tab==="invoices"||tab==="paid")&&invLoading&&<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading invoices...</div>}
+        {(tab==="invoices"||tab==="paid")&&invError&&(
+          <div style={{textAlign:"center",padding:"3rem"}}>
+            <div style={{color:"#8B2020",fontSize:13,marginBottom:12}}>{invError}</div>
+            <button onClick={loadInvoices} style={btnGhost}>Try again</button>
+          </div>
+        )}
+        {(tab==="invoices"||tab==="paid")&&invoices&&!invLoading&&!invError&&(
+          <InvoiceList key={tab} invoices={invoices} mode={tab==="paid"?"paid":"outstanding"} onMarkPaid={markPaid} markingId={markingId}/>
+        )}
 
         {tab==="requests"&&loading&&<div style={{textAlign:"center",padding:"3rem",color:B.black2}}>Loading...</div>}
 
