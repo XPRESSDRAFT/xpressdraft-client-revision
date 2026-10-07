@@ -150,4 +150,50 @@ router.get('/jobs/:jobId/invoices', auth, async (req, res) => {
   }
 });
 
+// Admin-only: every invoice from every contractor, newest first, each
+// with its live payment status from Monday (never cached) and a direct
+// link to its item on the payment board.
+router.get('/invoices/all', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+    const { data: invoices } = await supabase
+      .from('contractor_invoices').select('*').order('submitted_at', { ascending: false });
+    const list = invoices || [];
+
+    const contractorIds = [...new Set(list.map(i => i.contractor_id).filter(Boolean))];
+    const projectIds = [...new Set(list.map(i => i.project_id).filter(Boolean))];
+    const { data: contractors } = contractorIds.length
+      ? await supabase.from('users').select('id, name').in('id', contractorIds) : { data: [] };
+    const { data: projects } = projectIds.length
+      ? await supabase.from('projects').select('id, job_number, site_address, name').in('id', projectIds) : { data: [] };
+    const contractorName = Object.fromEntries((contractors || []).map(c => [c.id, c.name]));
+    const projectById = Object.fromEntries((projects || []).map(p => [p.id, p]));
+
+    // Monday caps how many items one query returns, so fetch in chunks.
+    const itemIds = list.map(i => i.monday_item_id).filter(Boolean);
+    const statusMap = {};
+    for (let n = 0; n < itemIds.length; n += 50) {
+      const chunk = itemIds.slice(n, n + 50);
+      const data = await mondayApi(`{ items(ids: [${chunk.join(',')}]) { id column_values(ids: ["${COL.paymentStatus}"]) { text } } }`);
+      (data?.data?.items || []).forEach(it => { statusMap[it.id] = it.column_values?.[0]?.text || 'Outstanding'; });
+    }
+
+    const enriched = list.map(i => {
+      const p = projectById[i.project_id];
+      return {
+        ...i,
+        contractorName: contractorName[i.contractor_id] || 'Unknown',
+        jobRef: [i.job_number || p?.job_number, p?.site_address].filter(Boolean).join(' — ') || p?.name || '—',
+        paymentStatus: statusMap[i.monday_item_id] || 'Outstanding',
+        mondayUrl: i.monday_item_id ? `https://xpressdraft.monday.com/boards/${PAYMENT_BOARD_ID}/pulses/${i.monday_item_id}` : null,
+      };
+    });
+    res.json({ invoices: enriched });
+  } catch (err) {
+    console.error('Admin invoices error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
