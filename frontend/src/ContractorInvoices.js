@@ -1,75 +1,199 @@
-import { useState, useEffect, useRef } from "react";
+const express = require('express');
+const router = express.Router();
+const { supabase } = require('../db');
+const { auth } = require('../middleware/auth');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const axios = require('axios');
+const FormDataNode = require('form-data');
 
-const B = { orange:"#EA672F", black:"#2A2B29", cream:"#F3EAE5", tone1:"#D2CAC4", tone2:"#A9A09B", black1:"#42453C", black2:"#5E635B", white:"#ffffff", green:"#2E5C10", greenBg:"#EAF3DE" };
-const btnPrimary={padding:"8px 16px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600};
-const inputSt={width:"100%",border:"1px solid "+B.tone1,borderRadius:7,padding:"8px 10px",fontSize:13,fontFamily:"Manrope,sans-serif",boxSizing:"border-box"};
+const PAYMENT_BOARD_ID = '18388612677';
+const PAYMENT_GROUP = 'group_mky12wa5';
+const COL = {
+  jobTag: 'tag_mkxz9v9m',
+  amount: 'numeric_mkxz32sz',
+  amountGst: 'numeric_mky1x0ve',
+  invoiceFile: 'file_mky1vgaf',
+  paymentStatus: 'color_mky1hrw4',
+};
+const GST_RATE = 0.10; // Australian GST — flag if this business operates under a different rate
 
-export default function ContractorInvoices({ jobId, apiBase, token }) {
-  const [prefill,setPrefill]=useState(null);
-  const [amount,setAmount]=useState("");
-  const [amountGst,setAmountGst]=useState("");
-  const [invoices,setInvoices]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [submitting,setSubmitting]=useState(false);
-  const fileRef=useRef();
-
-  const load=()=>{
-    Promise.all([
-      fetch(apiBase+"/api/contractor/jobs/"+jobId+"/invoice-prefill",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json()),
-      fetch(apiBase+"/api/contractor/jobs/"+jobId+"/invoices",{headers:{Authorization:"Bearer "+token}}).then(r=>r.json()),
-    ]).then(([pf,inv])=>{
-      setPrefill(pf);setAmount(pf.amount||"");setAmountGst("");
-      setInvoices(inv.invoices||[]);setLoading(false);
-    }).catch(()=>setLoading(false));
-  };
-  useEffect(()=>{load();},[jobId]);
-
-  const submitInvoice=async(file)=>{
-    if(!file||!amount)return;
-    setSubmitting(true);
-    const fd=new FormData();fd.append("file",file);fd.append("amount",amount);fd.append("amountGst",amountGst);
-    try{
-      const r=await fetch(apiBase+"/api/contractor/jobs/"+jobId+"/invoices",{method:"POST",headers:{Authorization:"Bearer "+token},body:fd});
-      if(!r.ok)throw new Error((await r.json()).error||"Submission failed");
-      load();
-      alert("Invoice submitted.");
-    }catch(e){alert("Failed to submit invoice: "+e.message);}
-    setSubmitting(false);
-  };
-
-  if(loading)return <div style={{padding:"1.25rem",color:B.black2,fontSize:13}}>Loading payment details...</div>;
-
-  return (
-    <div>
-      <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem",marginBottom:16}}>
-        <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 12px"}}>Submit Invoice</h3>
-        <label style={{fontSize:12,color:B.black2,display:"block",marginBottom:4}}>Amount (excl. GST)</label>
-        <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} style={{...inputSt,marginBottom:10}}/>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-          <label style={{fontSize:12,color:B.black2}}>Amount (incl. GST) — enter what applies to you</label>
-          <span onClick={()=>setAmountGst(amount?Math.round(Number(amount)*1.1):"")} style={{fontSize:11,color:B.orange,cursor:"pointer",fontWeight:600}}>Calculate (+10%)</span>
-        </div>
-        <input type="number" value={amountGst} onChange={e=>setAmountGst(e.target.value)} style={{...inputSt,marginBottom:14}}/>
-        <button onClick={()=>fileRef.current?.click()} disabled={submitting} style={{...btnPrimary,width:"100%",opacity:submitting?0.6:1}}>{submitting?"Submitting...":"Upload Invoice"}</button>
-        <input ref={fileRef} type="file" accept=".pdf" style={{display:"none"}} onChange={e=>submitInvoice(e.target.files[0])}/>
-      </div>
-
-      <div style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1.25rem"}}>
-        <h3 style={{fontSize:14,fontWeight:600,color:B.black,margin:"0 0 12px"}}>Invoice History</h3>
-        {invoices.length===0&&<p style={{fontSize:13,color:B.black2,margin:0}}>No invoices submitted yet.</p>}
-        {invoices.map(inv=>{
-          const isPaid=(inv.paymentStatus||"").toLowerCase().includes("paid");
-          return (
-            <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid "+B.cream}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:B.black}}>${Number(inv.amount_gst||inv.amount).toLocaleString()}</div>
-                <div style={{fontSize:11,color:B.black2}}>{new Date(inv.submitted_at).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"})} · {inv.file_name}</div>
-              </div>
-              <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:isPaid?B.greenBg:"#FEF3E8",color:isPaid?B.green:B.orange,fontWeight:700}}>{inv.paymentStatus}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+async function mondayApi(query) {
+  const res = await fetch('https://api.monday.com/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': process.env.MONDAY_API_TOKEN },
+    body: JSON.stringify({ query })
+  });
+  return res.json();
 }
+
+async function findJobTagId(jobNumber) {
+  const data = await mondayApi(`{ tags { id name } }`);
+  const tags = data?.data?.tags || [];
+  const match = tags.find(t => (t.name || '').trim().toLowerCase() === (jobNumber || '').trim().toLowerCase());
+  return match ? match.id : null;
+}
+
+async function uploadFileToMondayColumn(itemId, columnId, buffer, fileName, mimeType) {
+  const form = new FormDataNode();
+  form.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${itemId}, column_id: "${columnId}", file: $file) { id } }`);
+  form.append('variables', JSON.stringify({ file: null }));
+  form.append('map', JSON.stringify({ file: ['variables.file'] }));
+  form.append('file', buffer, { filename: fileName, contentType: mimeType, knownLength: buffer.length });
+  await axios.post('https://api.monday.com/v2/file', form, {
+    headers: { 'Authorization': process.env.MONDAY_API_TOKEN, ...form.getHeaders() }
+  });
+}
+
+async function loadAcceptedJobAndDollarFee(jobId, contractorId) {
+  const { data: job } = await supabase
+    .from('contractor_jobs')
+    .select(`*, project:projects(id, name, job_number, site_address, monday_item_id)`)
+    .eq('id', jobId).eq('contractor_id', contractorId).eq('status', 'accepted').single();
+  if (!job || !job.project?.monday_item_id) return { job: null, dollarFee: 0 };
+
+  const data = await mondayApi(`{
+    items(ids: [${job.project.monday_item_id}]) { column_values(ids: ["numeric_mkxzs5c4"]) { text } }
+  }`);
+  const dealValue = parseFloat(data?.data?.items?.[0]?.column_values?.[0]?.text) || 0;
+  const dollarFee = Math.round((dealValue * (job.total_fee || 0)) / 100);
+  return { job, dollarFee };
+}
+
+// Pre-fills the invoice amount from the job's already-calculated fee, so
+// the contractor doesn't have to work it out themselves — editable after.
+router.get('/jobs/:jobId/invoice-prefill', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const { job, dollarFee } = await loadAcceptedJobAndDollarFee(req.params.jobId, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Accepted job not found' });
+    res.json({
+      jobNumber: job.project.job_number,
+      amount: dollarFee,
+      amountGst: Math.round(dollarFee * (1 + GST_RATE)),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Submits an invoice: creates the payment-control item on Monday, uploads
+// the invoice file, tags it with the matching job number, and records it
+// locally so the contractor can see it and its live payment status later.
+router.post('/jobs/:jobId/invoices', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    if (!req.file) return res.status(400).json({ error: 'Invoice file required' });
+    const { amount, amountGst } = req.body;
+    if (!amount) return res.status(400).json({ error: 'Amount required' });
+
+    const { job } = await loadAcceptedJobAndDollarFee(req.params.jobId, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Accepted job not found' });
+
+    const tagId = await findJobTagId(job.project.job_number);
+    const columnValuesObj = {
+      [COL.amount]: Number(amount),
+      [COL.amountGst]: Number(amountGst) || Number(amount),
+      ...(tagId ? { [COL.jobTag]: { tag_ids: [Number(tagId)] } } : {})
+    };
+    const itemNameLiteral = JSON.stringify(req.user.name || 'Contractor');
+    const columnValuesLiteral = JSON.stringify(JSON.stringify(columnValuesObj));
+
+    const createRes = await mondayApi(`mutation {
+      create_item(board_id: ${PAYMENT_BOARD_ID}, group_id: "${PAYMENT_GROUP}", item_name: ${itemNameLiteral}, column_values: ${columnValuesLiteral}) { id }
+    }`);
+    const newItemId = createRes?.data?.create_item?.id;
+    if (!newItemId) throw new Error('Failed to create Monday payment item');
+
+    await uploadFileToMondayColumn(newItemId, COL.invoiceFile, req.file.buffer, req.file.originalname, req.file.mimetype);
+
+    await supabase.from('contractor_invoices').insert({
+      project_id: job.project.id, contractor_id: req.user.id, job_number: job.project.job_number,
+      amount: Number(amount), amount_gst: Number(amountGst) || Number(amount),
+      file_name: req.file.originalname, monday_item_id: String(newItemId),
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Invoice submission error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Lists this contractor's past invoices for a job, with live payment
+// status pulled from Monday (never cached) for each one.
+router.get('/jobs/:jobId/invoices', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'contractor') return res.status(403).json({ error: 'Contractor only' });
+    const { data: job } = await supabase
+      .from('contractor_jobs').select('project_id').eq('id', req.params.jobId).eq('contractor_id', req.user.id).single();
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    const { data: invoices } = await supabase
+      .from('contractor_invoices').select('*')
+      .eq('project_id', job.project_id).eq('contractor_id', req.user.id)
+      .order('submitted_at', { ascending: false });
+
+    const itemIds = (invoices || []).map(i => i.monday_item_id).filter(Boolean);
+    let statusMap = {};
+    if (itemIds.length > 0) {
+      const data = await mondayApi(`{
+        items(ids: [${itemIds.join(',')}]) { id column_values(ids: ["${COL.paymentStatus}"]) { text } }
+      }`);
+      (data?.data?.items || []).forEach(it => { statusMap[it.id] = it.column_values?.[0]?.text || 'Outstanding'; });
+    }
+
+    const enriched = (invoices || []).map(i => ({ ...i, paymentStatus: statusMap[i.monday_item_id] || 'Outstanding' }));
+    res.json({ invoices: enriched });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin-only: every invoice from every contractor, newest first, each
+// with its live payment status from Monday (never cached) and a direct
+// link to its item on the payment board.
+router.get('/invoices/all', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+    const { data: invoices } = await supabase
+      .from('contractor_invoices').select('*').order('submitted_at', { ascending: false });
+    const list = invoices || [];
+
+    const contractorIds = [...new Set(list.map(i => i.contractor_id).filter(Boolean))];
+    const projectIds = [...new Set(list.map(i => i.project_id).filter(Boolean))];
+    const { data: contractors } = contractorIds.length
+      ? await supabase.from('users').select('id, name').in('id', contractorIds) : { data: [] };
+    const { data: projects } = projectIds.length
+      ? await supabase.from('projects').select('id, job_number, site_address, name').in('id', projectIds) : { data: [] };
+    const contractorName = Object.fromEntries((contractors || []).map(c => [c.id, c.name]));
+    const projectById = Object.fromEntries((projects || []).map(p => [p.id, p]));
+
+    // Monday caps how many items one query returns, so fetch in chunks.
+    const itemIds = list.map(i => i.monday_item_id).filter(Boolean);
+    const statusMap = {};
+    for (let n = 0; n < itemIds.length; n += 50) {
+      const chunk = itemIds.slice(n, n + 50);
+      const data = await mondayApi(`{ items(ids: [${chunk.join(',')}]) { id column_values(ids: ["${COL.paymentStatus}"]) { text } } }`);
+      (data?.data?.items || []).forEach(it => { statusMap[it.id] = it.column_values?.[0]?.text || 'Outstanding'; });
+    }
+
+    const enriched = list.map(i => {
+      const p = projectById[i.project_id];
+      return {
+        ...i,
+        contractorName: contractorName[i.contractor_id] || 'Unknown',
+        jobRef: [i.job_number || p?.job_number, p?.site_address].filter(Boolean).join(' — ') || p?.name || '—',
+        paymentStatus: statusMap[i.monday_item_id] || 'Outstanding',
+        mondayUrl: i.monday_item_id ? `https://xpressdraft.monday.com/boards/${PAYMENT_BOARD_ID}/pulses/${i.monday_item_id}` : null,
+      };
+    });
+    res.json({ invoices: enriched });
+  } catch (err) {
+    console.error('Admin invoices error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;
