@@ -11,7 +11,7 @@ const B = {
 const btnPrimary={padding:"7px 14px",background:B.orange,color:B.white,border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5};
 const btnGhost={padding:"6px 12px",background:B.white,color:B.black1,border:"1px solid "+B.tone1,borderRadius:7,cursor:"pointer",fontSize:13,fontFamily:"Manrope,sans-serif",display:"inline-flex",alignItems:"center",gap:5};
 
-function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed}){
+function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,onSubmitted}){
   const canvasRef=useRef();
   const markupRef=useRef();
   const wrapRef=useRef();
@@ -45,6 +45,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed})
   const [canvasSize,setCanvasSize]=useState({w:1,h:1});
   const [showClearConfirm,setShowClearConfirm]=useState(false);
   const [selectedPathId,setSelectedPathId]=useState(null);
+  const [submitState,setSubmitState]=useState(null); // null | sending | done | failed
+  const [submitIsVariation,setSubmitIsVariation]=useState(false);
   const [,forceTick]=useState(0);
   const drawingRef=useRef(false);
   const curPath=useRef([]);
@@ -339,13 +341,15 @@ const generateMarkupPdf=async()=>{
       const confirmed=window.confirm("Submit All Changes\n\n"+stage+" Stage - Revision "+nextRev+" of "+total+"\n\nProceed?");
       if(!confirmed)return;
     }
+    // Cover the page straight away so there's no room for further amendments
+    // while the markup is built and sent.
+    setSubmitIsVariation(isVariation);setSubmitState("sending");
     let lastSummary=rs;
     for(const c of openComments){
       try{const d=await api.confirmRevision(drawing.id,c.id);lastSummary=d.revisionSummary;setComments(prev=>prev.map(x=>x.id===c.id?{...x,status:"confirmed"}:x));}catch(e){break;}
     }
     if(lastSummary)onRevisionConfirmed(lastSummary);
-    alert("All changes submitted. The Xpress Draft team will review and respond shortly."+(isVariation?" A variation fee applies to this revision — our team will be in touch with the cost.":""));
-    // PDF generation + Monday upload continues in the background from here.
+    // PDF generation + upload continues from here while the overlay stays up.
     try{
       const {pdf:submitPdf,allPins:submitPins}=await generateMarkupPdf();
       const fd=new FormData();
@@ -358,9 +362,10 @@ const generateMarkupPdf=async()=>{
         const errData=await submitRes.json().catch(()=>({}));
         throw new Error(errData.error||"Upload failed");
       }
+      setSubmitState("done");
     }catch(e){
       console.error("PDF upload error:",e.message,e.stack);
-      alert("Your comments were saved, but sending the marked-up drawing to Xpress Draft failed. Please contact info@xpressdraft.com.au so we can check this manually — your revision is still recorded.");
+      setSubmitState("failed");
     }
   };
 
@@ -370,6 +375,16 @@ const generateMarkupPdf=async()=>{
 
   return(
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {submitState&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:3000,background:B.cream,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:40,fontFamily:"Manrope,sans-serif"}}>
+          <div style={{fontSize:36}}>{submitState==="failed"?"⚠️":submitState==="done"?"✓":"⏳"}</div>
+          <h2 style={{color:B.black,margin:0,fontSize:22,textAlign:"center"}}>{submitState==="failed"?"We couldn't send your markup":"Your drawings are now with the Xpress Draft team"}</h2>
+          {submitState!=="failed"&&<p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:440,lineHeight:1.7,margin:0}}>Our team is reviewing your changes and will let you know as soon as your updated plans are ready. Changes are paused while the plans are under review, so there's nothing more you need to do.{submitIsVariation?" A variation fee applies to this revision — our team will be in touch with the cost.":""}</p>}
+          {submitState==="sending"&&<p style={{color:B.orange,fontSize:13,fontWeight:600,margin:0}}>Sending your markup to the team — please keep this page open…</p>}
+          {submitState==="done"&&<><p style={{color:"#2E5C10",fontSize:13,fontWeight:600,margin:0}}>✓ Sent successfully</p><button onClick={()=>{if(onSubmitted)onSubmitted();setSubmitState(null);}} style={{...btnPrimary,padding:"10px 28px",fontSize:14}}>Continue</button></>}
+          {submitState==="failed"&&<><p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:440,lineHeight:1.7,margin:0}}>Your comments were saved, but we couldn't send your marked-up drawing to the team. Please contact <a href="mailto:info@xpressdraft.com.au" style={{color:B.orange}}>info@xpressdraft.com.au</a> so we can check this manually — your revision is still recorded.</p><button onClick={()=>setSubmitState(null)} style={{...btnPrimary,padding:"10px 28px",fontSize:14}}>Close</button></>}
+        </div>
+      )}
       {showExportDialog&&(
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{background:B.white,borderRadius:12,padding:28,width:360,fontFamily:"Manrope,sans-serif"}}>
