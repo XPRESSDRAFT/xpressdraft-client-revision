@@ -37,6 +37,7 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,o
   const [pdfReady,setPdfReady]=useState(!!window.pdfjsLib);
   const [pdfDoc,setPdfDoc]=useState(null);
   const [page,setPage]=useState(1);
+  const pageRef=useRef(1);pageRef.current=page;
   const [totalPages,setTotalPages]=useState(1);
   const [zoom,setZoom]=useState(1);
   const [exportNum,setExportNum]=useState((project.markup_export_count||0)+1);
@@ -66,7 +67,10 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,o
         byPageDims[m.page||1]={w:m.canvas_width||0,h:m.canvas_height||0};
       });
       allMarkupsRef.current=byPage;setAllMarkupDims(byPageDims);
-      const cp=byPage[1]||[];pathsRef.current=cp;
+      // Use the page being viewed right now (not always page 1), and repaint:
+      // otherwise saved shapes stay invisible until the next click, and page 1's
+      // shapes get copied onto whatever page the user is actually on.
+      pathsRef.current=byPage[pageRef.current]||[];redraw();
     });
   },[drawing.id]);
 
@@ -216,7 +220,8 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,o
   };
 
   const addComment=async()=>{
-    const txt=newComment.trim();if(!txt)return;
+    const txt=newComment.trim();
+    if(!txt){alert("Please type your comment first, then press Done.");return;}
     try{
       const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
       setComments(prev=>[...prev,d.comment]);
