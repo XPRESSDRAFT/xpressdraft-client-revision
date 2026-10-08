@@ -581,7 +581,7 @@ function ProjectDetail({project,user,onBack}){
             <p style={{color:B.black2,fontSize:14,textAlign:"center",maxWidth:400,lineHeight:1.6}}>{lockState==="payment"?"Your drawings are ready but require payment before access. Please check your email for the payment link.":"Your changes are currently being reviewed by the Xpress Draft team. You'll be notified as soon as your updated drawings are ready."}</p>
             <a href="mailto:info@xpressdraft.com.au" style={{color:B.orange,fontSize:13}}>Contact us at info@xpressdraft.com.au</a>
           </div>;
-          if(activeDrawing)return<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)}/>;
+          if(activeDrawing)return<DrawingView drawing={activeDrawing} user={user} project={project} revisionSummary={revisionSummary} onRevisionConfirmed={rs=>setRevisionSummary(rs)} onSubmitted={()=>{project.locked=true;setDrawings(d=>[...d]);}}/>;
           return<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:B.black2}}>{loading?"Loading...":"No drawings"}</div>;
         })()}
       </div>
