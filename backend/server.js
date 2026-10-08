@@ -18,6 +18,7 @@ app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/users',      require('./routes/users'));
 app.use('/api/projects',   require('./routes/projects'));
 app.use('/api/projects/:projectId/drawings', require('./routes/drawings'));
+app.use('/api/drawings/:drawingId', require('./middleware/clientLockGuard').clientLockGuard);
 app.use('/api/drawings/:drawingId/comments', require('./routes/comments'));
 app.use('/api/drawings/:drawingId/markups',  require('./routes/markups'));
 app.use('/api/monday',     require('./routes/monday'));
