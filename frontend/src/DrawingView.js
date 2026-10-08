@@ -207,18 +207,30 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,o
   const deleteSelectedPath=()=>{const u=pathsRef.current.filter(p=>p.id!==selectedPathId);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};setSelectedPathId(null);redraw();};
   const rotateSelectedPath=()=>{const sel=pathsRef.current.find(p=>p.id===selectedPathId);if(!sel)return;const rotInput=prompt("Rotation angle in degrees:",String(sel.rotation||0));if(rotInput===null)return;const rotation=parseFloat(rotInput)||0;const u=pathsRef.current.map(p=>p.id===selectedPathId?{...p,rotation}:p);pathsRef.current=u;allMarkupsRef.current={...allMarkupsRef.current,[page]:u};redraw();};
 
+  // If the server refuses a change because the project is now under review,
+  // flip a stale open page to the Under review screen; otherwise explain why
+  // instead of failing silently.
+  const handleWriteError=(e)=>{
+    if(/under review|paused/i.test(e?.message||"")&&onSubmitted){onSubmitted();return;}
+    alert(e?.message||"That didn't save. Please try again.");
+  };
+
   const addComment=async()=>{
     const txt=newComment.trim();if(!txt)return;
-    const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
-    setComments(prev=>[...prev,d.comment]);
-    setNewComment("");setPendingPin(null);setSelectedCid(d.comment.id);setReplyTarget(d.comment.id);setTool("comment");
+    try{
+      const d=await api.addComment(drawing.id,{text:txt,type:ctype,pinX:pendingPin?.fx,pinY:pendingPin?.fy,page});
+      setComments(prev=>[...prev,d.comment]);
+      setNewComment("");setPendingPin(null);setSelectedCid(d.comment.id);setReplyTarget(d.comment.id);setTool("comment");
+    }catch(e){handleWriteError(e);}
   };
 
   const sendReply=async()=>{
     if(!replyDraft.trim()||!replyTarget)return;
-    const d=await api.addReply(drawing.id,replyTarget,replyDraft,replyIsPrivate);
-    setComments(comments.map(c=>c.id===replyTarget?{...c,replies:[...(c.replies||[]),d.reply]}:c));
-    setReplyDraft("");setReplyTarget(null);setReplyIsPrivate(false);
+    try{
+      const d=await api.addReply(drawing.id,replyTarget,replyDraft,replyIsPrivate);
+      setComments(comments.map(c=>c.id===replyTarget?{...c,replies:[...(c.replies||[]),d.reply]}:c));
+      setReplyDraft("");setReplyTarget(null);setReplyIsPrivate(false);
+    }catch(e){handleWriteError(e);}
   };
 
   const improveReply=async()=>{
@@ -253,9 +265,12 @@ function DrawingView({drawing,user,project,revisionSummary,onRevisionConfirmed,o
 
   const handleSave=async()=>{
     setSaving(true);const cw=markupRef.current?.width||0;const ch=markupRef.current?.height||0;
-    await api.saveMarkups(drawing.id,pathsRef.current,page,cw,ch);
-    allMarkupsRef.current={...allMarkupsRef.current,[page]:pathsRef.current};
-    setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));setSaving(false);
+    try{
+      await api.saveMarkups(drawing.id,pathsRef.current,page,cw,ch);
+      allMarkupsRef.current={...allMarkupsRef.current,[page]:pathsRef.current};
+      setAllMarkupDims(prev=>({...prev,[page]:{w:cw,h:ch}}));
+    }catch(e){handleWriteError(e);}
+    setSaving(false);
   };
 
 const generateMarkupPdf=async()=>{
