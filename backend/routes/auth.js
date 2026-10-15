@@ -8,57 +8,6 @@ const { auth } = require('../middleware/auth');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const MONDAY_GROUP_AWAITING_CLIENT = 'group_mkzqbpx4';
-
-async function moveToAwaitingClient(mondayItemId) {
-  try {
-    const mutation = `mutation {
-      move_item_to_group(
-        item_id: ${mondayItemId},
-        group_id: "${MONDAY_GROUP_AWAITING_CLIENT}"
-      ) { id }
-    }`;
-    await fetch('https://api.monday.com/v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: mutation })
-    });
-    console.log(`Moved Monday item ${mondayItemId} to AWAITING CLIENT`);
-  } catch (err) {
-    console.error('Monday move group error:', err);
-  }
-}
-// Sets the Timeline column itself to "AWAITING CLIENT" at the same
-// moment — so a contractor glancing at Timeline (which they can now edit
-// directly) can tell at a glance the client has just seen the latest
-// changes, without needing to check the board's group layout.
-async function setTimelineAwaitingClient(mondayItemId) {
-  try {
-    const mutation = `mutation {
-      change_column_value(
-        board_id: ${process.env.MONDAY_BOARD_ID},
-        item_id: ${mondayItemId},
-        column_id: "color_mky440wt",
-        value: "{\\"label\\":\\"AWAITING CLIENT\\"}"
-      ) { id }
-    }`;
-    await fetch('https://api.monday.com/v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: mutation })
-    });
-    console.log(`Set Timeline to AWAITING CLIENT for item ${mondayItemId}`);
-  } catch (err) {
-    console.error('Monday Timeline update error:', err);
-  }
-}
-
 router.post('/magic-link', async (req, res) => {
   try {
     const { email } = req.body;
@@ -149,22 +98,6 @@ router.post('/verify', async (req, res) => {
 
     if (!user) return res.status(400).json({ error: 'Invalid or expired link' });
     if (user.active === false) return res.status(403).json({ error: 'This account has been suspended. Please contact Xpress Draft.' });
-
-    if (user.role === 'client') {
-      const { data: projects } = await supabase
-        .from('projects')
-        .select('monday_item_id')
-        .eq('client_id', user.id)
-        .not('monday_item_id', 'is', null)
-        .eq('locked', false)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (projects && projects.length > 0 && projects[0].monday_item_id) {
-        await moveToAwaitingClient(projects[0].monday_item_id);
-        await setTimelineAwaitingClient(projects[0].monday_item_id);
-      }
-    }
 
     // Session token matches the magic link's 6-month duration — otherwise
     // a client would still be forced to re-click a login link every 7 days
