@@ -13,7 +13,7 @@ const { storeMarkupCopy } = require('../utils/markupStore');
 
 const BOARD_ID = process.env.MONDAY_BOARD_ID;
 const DELIVERY_STATUS_COL = 'color_mm64ffyg';
-const INSTRUCTIONS_FILE_COL = 'file_mkzh1knp';
+const CLIENT_MARKUPS_COL = 'file_mm83kc0p'; // CLIENT MARKUPS: everything a client sends us
 
 // Multer errors happen before the handler runs, so without this an
 // oversized PDF would crash with a raw error instead of a clear message.
@@ -70,7 +70,7 @@ router.post('/submit-markup', auth, wrapUpload(upload.single('pdf')), async (req
     } else {
       try {
         const form = new FormDataNode();
-        form.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "${INSTRUCTIONS_FILE_COL}", file: $file) { id column_values(ids: ["${INSTRUCTIONS_FILE_COL}"]) { value } } }`);
+        form.append('query', `mutation ($file: File!) { add_file_to_column(item_id: ${project.monday_item_id}, column_id: "${CLIENT_MARKUPS_COL}", file: $file) { id column_values(ids: ["${CLIENT_MARKUPS_COL}"]) { value } } }`);
         form.append('variables', JSON.stringify({ file: null }));
         form.append('map', JSON.stringify({ file: ['variables.file'] }));
         form.append('file', Buffer.from(pdfBuffer), { filename: fileName, contentType: 'application/pdf', knownLength: pdfBuffer.length });
@@ -89,7 +89,7 @@ router.post('/submit-markup', auth, wrapUpload(upload.single('pdf')), async (req
 
     // Logged from our own copy; the Monday asset id (when we have one) lets
     // the Instructions webhook recognise it and skip a duplicate entry.
-    if (copyUrl) await logInstructionEntry(project.id, { source: 'client', content_type: 'file', file_name: fileName, file_url: copyUrl, asset_id: newest ? String(newest.assetId) : null });
+    if (copyUrl) await logInstructionEntry(project.id, { source: 'client', content_type: 'file', file_name: fileName, file_url: copyUrl, asset_id: newest ? String(newest.assetId) : null, author_name: req.user?.name || clientName });
 
     if (project.monday_item_id) {
       await mondayApi(`mutation { move_item_to_group(item_id: ${project.monday_item_id}, group_id: "group_title") { id } }`);
@@ -109,8 +109,8 @@ router.post('/submit-markup', auth, wrapUpload(upload.single('pdf')), async (req
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;">
         <h2 style="color:${mondayError ? '#E24B4A' : '#2A2B29'};">${mondayError ? 'Markup saved, but NOT on Monday' : 'Client markup submitted'}</h2>
         <p style="color:#5E635B;font-size:15px;line-height:1.8;"><strong>${clientName}</strong> has submitted their markup for <strong>${jobNumber}</strong>.<br/><br/>${mondayError
-          ? `It could <strong>not</strong> be added to Monday: <strong>${mondayError}</strong>.<br/><br/>A copy is safely stored in the portal. Download it below and add it to the Instructions column on Monday manually.`
-          : `The marked-up PDF has been uploaded to Monday under the Instructions column.<br/><br/>The item has been moved to <strong>TO BE REVIEWED</strong>.`}</p>
+          ? `It could <strong>not</strong> be added to Monday: <strong>${mondayError}</strong>.<br/><br/>A copy is safely stored in the portal. Download it below and add it to the CLIENT MARKUPS column on Monday manually.`
+          : `The marked-up PDF has been uploaded to Monday, in the CLIENT MARKUPS column.<br/><br/>The item has been moved to <strong>TO BE REVIEWED</strong>.`}</p>
         ${comments}
         ${copyLink}<a href="https://xpressdraft.monday.com/boards/${BOARD_ID}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;margin-top:16px;">View in Monday →</a>
       </div>`
