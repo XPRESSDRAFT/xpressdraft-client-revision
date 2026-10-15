@@ -7,13 +7,18 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const { rehostMondayAsset } = require('../utils/mondayFileRehost');
 
 const COL = {
-  instructionsText: 'text_mkzg2e0',
-  instructionsFile: 'file_mkzh1knp',
+  instructionsText: 'text_mkzg2e0',      // INSTRUCTIONS (text) - kept working until Luiz switches over
+  reviewInstructions: 'long_text_mm83v4zp', // REVIEW INSTRUCTIONS (long text)
+  reviewFiles: 'file_mkzh1knp',          // REVIEW FILES - the internal review side only
+  clientMarkups: 'file_mm83kc0p',        // CLIENT MARKUPS - everything the client sends us
   jobNumber: 'text_mm06wmkq',
   sourceProposal: 'text_mm83tq9f',
   siteAddress: 'text_mky7ypsg',
   revision: 'color_mky4x01c',
 };
+// Which history "source" each file column produces.
+const TEXT_COLUMNS = [COL.instructionsText, COL.reviewInstructions];
+const FILE_COLUMNS = { [COL.reviewFiles]: 'xpressdraft', [COL.clientMarkups]: 'client' };
 
 async function mondayApi(query) {
   const res = await fetch('https://api.monday.com/v2', {
@@ -44,51 +49,17 @@ async function findProject(pulseId) {
   return match.project;
 }
 
-// Fires whenever the Instructions text or file column changes on Monday.
-// Each real change (non-empty text, or a file not seen before) is logged
-// as its own history row rather than overwriting the last one, since
-// Xpress Draft manually clears/replaces these columns each time.
-router.post('/instructions-updated', async (req, res) => {
+// Emails the assigned contractor that new instructions arrived.
+async function emailContractor(projectId) {
   try {
-    if (req.body.challenge) return res.json({ challenge: req.body.challenge });
-    const event = req.body.event;
-    if (!event) return res.json({ ok: true });
-    const { pulseId } = event;
-
-    const project = await findProject(pulseId);
-    if (!project) { console.error(`instructions-updated: no project found for item ${pulseId}`); return res.json({ ok: true }); }
-
-    const data = await mondayApi(`{
-      items(ids: [${pulseId}]) {
-        column_values(ids: ["${COL.instructionsText}", "${COL.instructionsFile}", "${COL.revision}"]) { id text value }
-      }
-    }`);
-    const cols = {};
-    (data?.data?.items?.[0]?.column_values || []).forEach(c => { cols[c.id] = c; });
-    const revisionLabel = cols[COL.revision]?.text || '';
-    const textVal = (cols[COL.instructionsText]?.text || '').trim();
-    let changed = false;
-
-    if (textVal) {
-      const { data: lastEntry } = await supabase
-        .from('job_instructions').select('content').eq('project_id', project.id).eq('content_type', 'text')
-        .order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const isDuplicate = lastEntry && lastEntry.content === textVal;
-
-      if (!isDuplicate) {
-        await supabase.from('job_instructions').insert({
-          project_id: project.id, source: 'xpressdraft', content_type: 'text', content: textVal, revision_label: revisionLabel
-        });
-        changed = true;
-        try {
-          const { data: fullProject } = await supabase
-            .from('projects').select('contractor_id, job_number, site_address, name').eq('id', project.id).single();
-          if (fullProject?.contractor_id) {
-            const { data: contractorUser } = await supabase
-              .from('users').select('name, email').eq('id', fullProject.contractor_id).single();
-            if (contractorUser?.email) {
-              const jobRef = [fullProject.job_number, fullProject.site_address].filter(Boolean).join(' — ') || fullProject.name;
-              await resend.emails.send({
+    const { data: fullProject } = await supabase
+      .from('projects').select('contractor_id, job_number, site_address, name').eq('id', projectId).single();
+    if (!fullProject?.contractor_id) return;
+    const { data: contractorUser } = await supabase
+      .from('users').select('name, email').eq('id', fullProject.contractor_id).single();
+    if (!contractorUser?.email) return;
+    const jobRef = [fullProject.job_number, fullProject.site_address].filter(Boolean).join(' — ') || fullProject.name;
+    await resend.emails.send({
                 from: 'Xpress Draft Portal <noreply@xpressdraft.com.au>',
                 to: contractorUser.email,
                 subject: `New instructions received — ${jobRef}`,
@@ -98,32 +69,98 @@ router.post('/instructions-updated', async (req, res) => {
                   <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background:#EA672F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;margin-top:16px;">Open Contractor Portal →</a>
                 </div>`
               });
-            }
-          }
-        } catch (emailErr) { console.error('Contractor instructions email error:', emailErr.message); }
-      }
-    }
+  } catch (emailErr) { console.error('Contractor instructions email error:', emailErr.message); }
+}
 
-    let files = [];
-    try { files = JSON.parse(cols[COL.instructionsFile]?.value || '{}')?.files || []; } catch (e) {}
-    for (const f of files) {
-      const { data: existing } = await supabase
-        .from('job_instructions').select('id').eq('project_id', project.id).eq('asset_id', String(f.assetId)).maybeSingle();
-      if (existing) continue;
-      // Re-host on our own storage — Monday's own link requires a logged-in
-      // Monday session, which contractors and clients don't have.
-      let fileUrl;
-      try {
-        fileUrl = await rehostMondayAsset(f.assetId, f.name, project.id);
-      } catch (rehostErr) {
-        console.error('Rehost error for asset', f.assetId, rehostErr.message);
-        continue;
-      }
+// Monday fires this webhook several times for one change. Files already being
+// processed by a parallel call are skipped, so each file is downloaded and
+// re-hosted once. (The unique index on project + asset is the backstop.)
+const inFlight = new Set();
+const userNames = new Map();
+async function mondayUserName(userId) {
+  if (!userId) return null;
+  const key = String(userId);
+  if (userNames.has(key)) return userNames.get(key);
+  try {
+    const d = await mondayApi(`{ users(ids: [${Number(userId)}]) { name } }`);
+    const name = d?.data?.users?.[0]?.name || null;
+    userNames.set(key, name);
+    return name;
+  } catch (e) { return null; }
+}
+
+// Fires when the INSTRUCTIONS text, REVIEW INSTRUCTIONS, REVIEW FILES or
+// CLIENT MARKUPS column changes on Monday. Only the column that actually
+// changed is processed, and each entry records who changed it (the Monday
+// user's name) and whether it came from the client or from the review side.
+router.post('/instructions-updated', async (req, res) => {
+  try {
+    if (req.body.challenge) return res.json({ challenge: req.body.challenge });
+    const event = req.body.event;
+    if (!event) return res.json({ ok: true });
+    const { pulseId, columnId, userId } = event;
+
+    const fileColIds = Object.keys(FILE_COLUMNS);
+    if (columnId && ![...TEXT_COLUMNS, ...fileColIds].includes(columnId)) return res.json({ ok: true }); // not one of ours
+    const textCols = columnId ? TEXT_COLUMNS.filter(c => c === columnId) : TEXT_COLUMNS;
+    const fileCols = columnId ? fileColIds.filter(c => c === columnId) : fileColIds;
+
+    const project = await findProject(pulseId);
+    if (!project) { console.error(`instructions-updated: no project found for item ${pulseId}`); return res.json({ ok: true }); }
+
+    const ids = [...textCols, ...fileCols, COL.revision].map(c => `"${c}"`).join(', ');
+    const data = await mondayApi(`{ items(ids: [${pulseId}]) { column_values(ids: [${ids}]) { id text value } } }`);
+    const cols = {};
+    (data?.data?.items?.[0]?.column_values || []).forEach(c => { cols[c.id] = c; });
+    const revisionLabel = cols[COL.revision]?.text || '';
+    const authorName = await mondayUserName(userId);
+    let changed = false;
+
+    for (const colId of textCols) {
+      const textVal = (cols[colId]?.text || '').trim();
+      if (!textVal) continue;
+      const { data: lastEntry } = await supabase
+        .from('job_instructions').select('content').eq('project_id', project.id).eq('content_type', 'text')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (lastEntry && lastEntry.content === textVal) continue; // same text as the last entry
       await supabase.from('job_instructions').insert({
-        project_id: project.id, source: 'xpressdraft', content_type: 'file',
-        file_name: f.name, asset_id: String(f.assetId), revision_label: revisionLabel, file_url: fileUrl
+        project_id: project.id, source: 'xpressdraft', content_type: 'text', content: textVal,
+        revision_label: revisionLabel, author_name: authorName
       });
       changed = true;
+      await emailContractor(project.id);
+    }
+
+    for (const colId of fileCols) {
+      let files = [];
+      try { files = JSON.parse(cols[colId]?.value || '{}')?.files || []; } catch (e) {}
+      for (const f of files) {
+        const assetId = String(f.assetId);
+        if (inFlight.has(assetId)) continue;
+        inFlight.add(assetId);
+        try {
+          const { data: existing } = await supabase
+            .from('job_instructions').select('id').eq('project_id', project.id).eq('asset_id', assetId).maybeSingle();
+          if (existing) continue;
+          // Re-host on our own storage — Monday's own link requires a logged-in
+          // Monday session, which contractors and clients don't have.
+          let fileUrl;
+          try {
+            fileUrl = await rehostMondayAsset(f.assetId, f.name, project.id);
+          } catch (rehostErr) {
+            console.error('Rehost error for asset', f.assetId, rehostErr.message);
+            continue;
+          }
+          const { error } = await supabase.from('job_instructions').insert({
+            project_id: project.id, source: FILE_COLUMNS[colId], content_type: 'file', file_name: f.name,
+            asset_id: assetId, revision_label: revisionLabel, file_url: fileUrl, author_name: authorName
+          });
+          if (error && error.code !== '23505') console.error('job_instructions insert error:', error.message); // 23505 = already logged
+          else if (!error) changed = true;
+        } finally {
+          inFlight.delete(assetId);
+        }
+      }
     }
 
     if (changed) await supabase.from('projects').update({ last_instructions_at: new Date().toISOString() }).eq('id', project.id);
