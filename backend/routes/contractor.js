@@ -8,6 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendAdminSms } = require('../utils/sms');
 
 const PROPOSALS_BOARD_ID = '18389820785';
+const { addressesMatch } = require('../utils/projectMatch');
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
 
 async function mondayApi(query) {
@@ -57,34 +58,36 @@ async function getBatchMondayStatus(itemIds) {
   return map;
 }
 
-// Searches the Proposals board for the item matching this job's job
-// number, confirmed with site address, and pulls the Enquire/Briefing
-// text from it. Used as a fallback when the Overall Projects item has
-// nothing in that field — the two boards are separate items on Monday,
-// linked only by job number + site address, not a shared column.
-async function findProposalsBriefing(jobNumber, siteAddress) {
-  if (!jobNumber) return '';
+// Finds the Enquire/Briefing text on the Proposals board. Used as a fallback
+// when the Overall Projects item has nothing in that field. The project's
+// SOURCE PROPOSAL ID is the proposal item's own ID, so it is fetched
+// directly. Without one, fall back to job number + site address and accept a
+// result ONLY when exactly one proposal matches — never "the first one",
+// which could show another client's briefing to the contractor.
+async function findProposalsBriefing(jobNumber, siteAddress, sourceProposalId) {
   try {
+    if (sourceProposalId) {
+      const d = await mondayApi(`{ items(ids: [${sourceProposalId}]) { column_values(ids: ["long_text_mkxzds8g"]) { id text } } }`);
+      const item = d?.data?.items?.[0];
+      if (item) return item.column_values?.[0]?.text || '';
+    }
+    if (!jobNumber || !siteAddress) return '';
     const data = await mondayApi(`{
       boards(ids: [${PROPOSALS_BOARD_ID}]) {
-        items_page(query_params: {rules: [{column_id: "text_mky9p0t3", compare_value: ["${jobNumber}"], operator: any_of}]}) {
+        items_page(query_params: {rules: [{column_id: "text_mky9p0t3", compare_value: [${JSON.stringify(jobNumber)}], operator: any_of}]}) {
           items { id column_values(ids: ["text_mky7ram8", "long_text_mkxzds8g"]) { id text } }
         }
       }
     }`);
     const items = data?.data?.boards?.[0]?.items_page?.items || [];
-    for (const it of items) {
-      const cols = {};
-      it.column_values.forEach(c => { cols[c.id] = c.text || ''; });
-      if (!siteAddress || cols['text_mky7ram8'].toLowerCase().includes(siteAddress.toLowerCase()) || siteAddress.toLowerCase().includes(cols['text_mky7ram8'].toLowerCase())) {
-        return cols['long_text_mkxzds8g'] || '';
-      }
-    }
+    const hits = items.filter(it => addressesMatch(siteAddress, it.column_values.find(c => c.id === 'text_mky7ram8')?.text || ''));
+    if (hits.length !== 1) return '';
+    return hits[0].column_values.find(c => c.id === 'long_text_mkxzds8g')?.text || '';
   } catch (e) { console.error('findProposalsBriefing error:', e.message); }
   return '';
 }
 
-async function getProposalDetails(mondayItemId, jobNumber, siteAddress) {
+async function getProposalDetails(mondayItemId, jobNumber, siteAddress, sourceProposalId) {
   const data = await mondayApi(`{
     items(ids: [${mondayItemId}]) {
       name
@@ -128,7 +131,7 @@ async function getProposalDetails(mondayItemId, jobNumber, siteAddress) {
   } catch(e) {}
 
   let briefing = cols['long_text_mkxzds8g']?.text || '';
-  if (!briefing) briefing = await findProposalsBriefing(jobNumber, siteAddress);
+  if (!briefing) briefing = await findProposalsBriefing(jobNumber, siteAddress, sourceProposalId);
 
   return {
     briefing,
@@ -146,7 +149,7 @@ router.get('/jobs', auth, async (req, res) => {
 
     const { data: jobs } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at, source_proposal_id)`)
       .eq('contractor_id', req.user.id)
       .order('created_at', { ascending: false });
 
@@ -178,7 +181,7 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
 
     const { data: job } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at, source_proposal_id)`)
       .eq('id', req.params.jobId)
       .eq('contractor_id', req.user.id)
       .single();
@@ -194,7 +197,7 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
     let proposalDetails = null;
     let mondayStatus = null;
     if (job.project?.monday_item_id) {
-      proposalDetails = await getProposalDetails(job.project.monday_item_id, job.project.job_number, job.project.site_address);
+      proposalDetails = await getProposalDetails(job.project.monday_item_id, job.project.job_number, job.project.site_address, job.project.source_proposal_id);
       const statusMap = await getBatchMondayStatus([job.project.monday_item_id]);
       mondayStatus = statusMap[job.project.monday_item_id] || null;
     }
