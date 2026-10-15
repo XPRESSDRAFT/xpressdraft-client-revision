@@ -11,7 +11,8 @@ const { rehostMondayAsset } = require('../utils/mondayFileRehost');
 const { sendAdminSms } = require('../utils/sms');
 const { findMondayItemForProject } = require('../utils/projectMatch');
 
-const INSTRUCTIONS_FILE_COL = 'file_mkzh1knp';
+const CLIENT_MARKUPS_COL = 'file_mm83kc0p'; // everything a client sends us
+const REVIEW_FILES_COL = 'file_mkzh1knp';   // the internal review side only
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
 
 // Multer errors happen before the route handler runs, so without this a
@@ -85,14 +86,16 @@ router.post('/:projectId', auth, wrapUpload(upload.single('file')), async (req, 
       }
     }
 
-    const uploadResult = await uploadFileToMondayColumn(project.monday_item_id, INSTRUCTIONS_FILE_COL, req.file.buffer, req.file.originalname, req.file.mimetype);
+    // A client's files go to CLIENT MARKUPS; team / admin / contractor files go to REVIEW FILES.
+    const column = req.user.role === 'client' ? CLIENT_MARKUPS_COL : REVIEW_FILES_COL;
+    const uploadResult = await uploadFileToMondayColumn(project.monday_item_id, column, req.file.buffer, req.file.originalname, req.file.mimetype);
     try {
       const colVal = uploadResult?.data?.add_file_to_column?.column_values?.[0]?.value;
       const files = colVal ? (JSON.parse(colVal)?.files || []) : [];
       const newest = files[files.length - 1];
       if (newest) {
         const rehostedUrl = await rehostMondayAsset(newest.assetId, newest.name, project.id).catch(e => { console.error('Rehost error:', e.message); return null; });
-        if (rehostedUrl) await logInstructionEntry(project.id, { source: req.user.role === 'client' ? 'client' : 'xpressdraft', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: rehostedUrl });
+        if (rehostedUrl) await logInstructionEntry(project.id, { source: req.user.role === 'client' ? 'client' : 'xpressdraft', content_type: 'file', file_name: newest.name, asset_id: String(newest.assetId), file_url: rehostedUrl, author_name: req.user.name || null });
       }
     } catch (logErr) { console.error('Instructions log error:', logErr.message); }
 
