@@ -94,6 +94,8 @@ router.post('/submit-markup', auth, wrapUpload(upload.single('pdf')), async (req
     if (project.monday_item_id) {
       await mondayApi(`mutation { move_item_to_group(item_id: ${project.monday_item_id}, group_id: "group_title") { id } }`);
       await mondayApi(`mutation { change_column_value(board_id: ${BOARD_ID}, item_id: ${project.monday_item_id}, column_id: "${DELIVERY_STATUS_COL}", value: ${JSON.stringify(JSON.stringify({ index: 5 }))}) { id } }`);
+      // Timeline rule: a client submitting an amendment sets PROJECT OVERVIEW (index 3).
+      await mondayApi(`mutation { change_column_value(board_id: ${BOARD_ID}, item_id: ${project.monday_item_id}, column_id: "color_mky440wt", value: ${JSON.stringify(JSON.stringify({ index: 3 }))}) { id } }`);
     }
     await supabase.from('projects').update({ locked: true }).eq('id', project.id);
 
