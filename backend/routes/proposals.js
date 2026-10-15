@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendClientSms } = require('../utils/sms');
 const { addressesMatch } = require('../utils/projectMatch');
+const { auth } = require('../middleware/auth');
+const { technicalStepsFrom, friendlyDate } = require('../utils/technicalStep');
 const PROPOSALS_BOARD_ID = '18389820785';
 const STARTED_PROJECTS_GROUP = 'group_mky4ey72';
 const CONTRACTOR_COL_PROPOSALS = 'board_relation_mky4v9kn';
@@ -233,13 +235,24 @@ router.post('/webhook', async (req, res) => {
   }
 });
 // Get project status for client dashboard
-router.get('/project-status/:projectId', async (req, res) => {
+// Technical Work mirrors on the Overall Projects item (type, status, date) plus Due Date.
+// DONE BY (lookup_mm83cbe4) is deliberately NEVER requested: a client must not see who is doing the work.
+const TECH_COLS = { type: 'lookup_mm83t2tn', status: 'lookup_mm83zxr0', date: 'lookup_mm83cfsa' };
+const DUE_DATE_COL = 'date_mkxzx99y';
+router.get('/project-status/:projectId', auth, async (req, res) => {
   try {
     const { data: project } = await supabase
       .from('projects')
-      .select('monday_item_id, job_number, site_address, is_working_partner, contractor_id')
+      .select('monday_item_id, job_number, site_address, is_working_partner, contractor_id, client_id')
       .eq('id', req.params.projectId)
       .single();
+    // This route used to answer anyone who knew a project's ID. Now only that project's own
+    // client, its assigned contractor, or admin / team may read it.
+    const role = req.user.role;
+    const allowed = project && (role === 'admin' || role === 'team'
+      || (role === 'client' && project.client_id === req.user.id)
+      || (role === 'contractor' && project.contractor_id === req.user.id));
+    if (!allowed) return res.status(403).json({ error: 'Access denied' });
     // Designer info is only shown to the client once the contractor has
     // actually accepted the job — not merely assigned/pending.
     const getAcceptedDesigner = async () => {
@@ -258,19 +271,25 @@ router.get('/project-status/:projectId', async (req, res) => {
     }
     const data = await mondayApi(`{
       items(ids: [${project.monday_item_id}]) {
-        column_values(ids: ["${COL.stage}", "${COL.revision}", "${COL.timeline}"]) {
+        column_values(ids: ["${COL.stage}", "${COL.revision}", "${COL.timeline}", "${TECH_COLS.type}", "${TECH_COLS.status}", "${TECH_COLS.date}", "${DUE_DATE_COL}"]) {
           id text
+          ... on MirrorValue { display_value }
         }
       }
     }`);
     const cols = {};
     const colVals = data?.data?.items?.[0]?.column_values || [];
     colVals.forEach(c => { cols[c.id] = c.text || ''; });
+    // Mirror columns carry their readable value in display_value, not text.
+    const mirror = {};
+    colVals.forEach(c => { mirror[c.id] = c.display_value ?? c.text ?? ''; });
     const { designerName, designerPhone } = await getAcceptedDesigner();
     res.json({
       stage: cols[COL.stage] || '—',
       revision: cols[COL.revision] || '—',
       timeline: cols[COL.timeline] || '—',
+      technicalSteps: technicalStepsFrom({ types: mirror[TECH_COLS.type], statuses: mirror[TECH_COLS.status], dates: mirror[TECH_COLS.date] }),
+      dueDate: friendlyDate(cols[DUE_DATE_COL], true),
       isWorkingPartner: project.is_working_partner || false,
       designerName,
       designerPhone
