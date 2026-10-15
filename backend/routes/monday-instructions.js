@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
+const { findProjectForMondayItem, alertOnce } = require('../utils/projectMatch');
 const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { rehostMondayAsset } = require('../utils/mondayFileRehost');
@@ -9,6 +10,7 @@ const COL = {
   instructionsText: 'text_mkzg2e0',
   instructionsFile: 'file_mkzh1knp',
   jobNumber: 'text_mm06wmkq',
+  sourceProposal: 'text_mm83tq9f',
   siteAddress: 'text_mky7ypsg',
   revision: 'color_mky4x01c',
 };
@@ -23,19 +25,23 @@ async function mondayApi(query) {
 }
 
 async function findProject(pulseId) {
+  // Cheap exact check first: this webhook can fire several times per change.
   let { data: project } = await supabase
-    .from('projects').select('id').eq('monday_item_id', String(pulseId)).maybeSingle();
+    .from('projects').select('*').eq('monday_item_id', String(pulseId)).maybeSingle();
   if (project) return project;
   const data = await mondayApi(`{
-    items(ids: [${pulseId}]) { column_values(ids: ["${COL.jobNumber}", "${COL.siteAddress}"]) { id text } }
+    items(ids: [${pulseId}]) { column_values(ids: ["${COL.jobNumber}", "${COL.siteAddress}", "${COL.sourceProposal}"]) { id text } }
   }`);
   const cols = {};
   (data?.data?.items?.[0]?.column_values || []).forEach(c => { cols[c.id] = c.text || ''; });
-  if (!cols[COL.jobNumber]) return null;
-  const { data: byJobNumber } = await supabase
-    .from('projects').select('id')
-    .eq('job_number', cols[COL.jobNumber]).ilike('site_address', `%${cols[COL.siteAddress] || ''}%`).maybeSingle();
-  return byJobNumber;
+  const match = await findProjectForMondayItem({
+    pulseId, sourceProposalId: cols[COL.sourceProposal], jobNumber: cols[COL.jobNumber], siteAddress: cols[COL.siteAddress]
+  });
+  if (!match.project) {
+    await alertOnce(`instructions:${pulseId}`, `⚠️ Instructions/files on Monday item ${pulseId} (${cols[COL.jobNumber] || 'no job number'}) could not be matched to a portal project (${match.reason}).`);
+    return null;
+  }
+  return match.project;
 }
 
 // Fires whenever the Instructions text or file column changes on Monday.
