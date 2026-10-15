@@ -67,7 +67,20 @@ async function addMondayNote(itemId, boardId, note) {
 // Timeline is written by INDEX, never label text: AWAITING CLIENT exists
 // twice on the column (13 and 17), so a label write could hit the wrong one.
 async function setTimelineIndex(itemId, boardId, index) {
-  await mondayApi(`mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "color_mky440wt", value: ${JSON.stringify(JSON.stringify({ index }))}) { id } }`);
+  const r = await mondayApi(`mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "color_mky440wt", value: ${JSON.stringify(JSON.stringify({ index }))}) { id } }`);
+  // Monday answers HTTP 200 even when it refuses a change, so look inside the reply.
+  if (r?.errors?.length) throw new Error(r.errors[0].message || 'Monday refused the Timeline change');
+}
+// A Timeline problem must never block a delivery or an approval. If Monday refuses the write, post a
+// note on the item and text the owner instead, so it can be set by hand.
+async function setTimelineOrAlert(itemId, boardId, index, label, jobRef) {
+  try {
+    await setTimelineIndex(itemId, boardId, index);
+  } catch (e) {
+    console.error('Timeline write error:', e.message);
+    try { await addMondayNote(itemId, boardId, `⚠️ Xpress Draft Portal: could not set the Timeline to ${label} (${e.message}). Please set it by hand.`); } catch (noteErr) {}
+    await alertOnce(`timeline:${itemId}:${index}`, `⚠️ Timeline not set to ${label} for ${jobRef}: ${e.message}. Please set it by hand.`);
+  }
 }
 async function sendEmail(to, subject, html, attachments = []) {
   const payload = { from: 'Xpress Draft <noreply@xpressdraft.com.au>', to, subject, html };
@@ -371,11 +384,14 @@ router.post('/webhook', async (req, res) => {
       variation_link: paymentLink || null,
       sent_to: clientEmail
     });
-    // Stamp the delivery. Nothing else changes on Monday here: DELIVERY STATUS stays READY TO DELIVER
-    // until the client opens a drawing. At that moment (utils/clientAccess.js) it becomes UNDER REVIEW,
-    // the Timeline becomes AWAITING CLIENT and the item moves to the AWAITING CLIENT group, so the
-    // team can tell at a glance whether the client has looked yet.
+    // Stamp the delivery. DELIVERY STATUS deliberately STAYS READY TO DELIVER here: when the client first
+    // opens a drawing (utils/clientAccess.js) it becomes UNDER REVIEW and the item moves to the AWAITING
+    // CLIENT group, so the team can tell at a glance whether the client has looked yet.
     await supabase.from('projects').update({ delivered_at: new Date().toISOString() }).eq('id', project.id);
+    // Timeline rule: AWAITING CLIENT (index 13) is set now, in the same step, for every delivery type
+    // (free, paid or variation). Only reached when the delivery actually went out: a blocked delivery or an
+    // unmatched project returned earlier and leaves the Timeline alone.
+    await setTimelineOrAlert(pulseId, boardId, 13, 'AWAITING CLIENT', jobNumber);
     console.log(`Delivery sent: ${deliveryType} to ${clientEmail}`);
     res.json({ ok: true, deliveryType });
   } catch (err) {
@@ -512,7 +528,7 @@ router.post('/approve', auth, async (req, res) => {
         ) { id }
       }`);
       // Timeline rule: the client approving and proceeding sets PROJECT OVERVIEW (index 3).
-      await setTimelineIndex(project.monday_item_id, process.env.MONDAY_BOARD_ID, 3);
+      await setTimelineOrAlert(project.monday_item_id, process.env.MONDAY_BOARD_ID, 3, 'PROJECT OVERVIEW', jobNumber);
     }
     console.log(`Approval sent for ${jobNumber}`);
     res.json({ ok: true });
