@@ -19,7 +19,7 @@ export default function ContractorInstructions({ jobId, apiBase, token, onViewed
       {entries.map(e=>(
         <div key={e.id} style={{background:B.white,border:"1px solid "+B.tone1,borderRadius:10,padding:"1rem 1.25rem",borderLeft:"3px solid "+(e.source==="xpressdraft"?B.orange:"#378ADD")}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <span style={{fontSize:12,fontWeight:700,color:e.source==="xpressdraft"?B.orange:"#1A4A8A"}}>{e.source==="xpressdraft"?"Xpress Draft":"Client"}</span>
+            <span style={{fontSize:12,fontWeight:700,color:e.source==="xpressdraft"?B.orange:"#1A4A8A"}}>{e.source==="client"?"From client":"From review"+(e.author_name?" – "+e.author_name:"")}</span>
             <span style={{fontSize:11,color:B.black2}}>{new Date(e.created_at).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}{e.revision_label?" · "+e.revision_label:""}</span>
           </div>
           {e.content_type==="text"
