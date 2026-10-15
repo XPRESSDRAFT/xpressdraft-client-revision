@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
+const { findProjectForMondayItem, alertOnce } = require('../utils/projectMatch');
 
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
 const CONTRACTOR_COL = 'board_relation_mky4dh21';
-const COL = { jobNumber: 'text_mm06wmkq', siteAddress: 'text_mky7ypsg' };
+const COL = { jobNumber: 'text_mm06wmkq', siteAddress: 'text_mky7ypsg', sourceProposal: 'text_mm83tq9f' };
 
 async function mondayApi(query) {
   const res = await fetch('https://api.monday.com/v2', {
@@ -15,7 +16,7 @@ async function mondayApi(query) {
   return res.json();
 }
 async function addMondayNote(itemId, note) {
-  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: "${note}") { id } }`);
+  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: ${JSON.stringify(note)}) { id } }`);
 }
 async function getContractorFromRelation(itemId) {
   const data = await mondayApi(`{
@@ -48,25 +49,20 @@ router.post('/contractor-assigned', async (req, res) => {
     const { pulseId, boardId } = event;
 
     const itemData = await mondayApi(`{
-      items(ids: [${pulseId}]) { column_values(ids: ["${COL.jobNumber}", "${COL.siteAddress}"]) { id text } }
+      items(ids: [${pulseId}]) { column_values(ids: ["${COL.jobNumber}", "${COL.siteAddress}", "${COL.sourceProposal}"]) { id text } }
     }`);
     const cols = {};
     (itemData?.data?.items?.[0]?.column_values || []).forEach(c => { cols[c.id] = c.text || ''; });
     const jobNumber = cols[COL.jobNumber];
     const siteAddress = cols[COL.siteAddress];
-
-    let { data: project } = await supabase
-      .from('projects').select('*')
-      .eq('monday_item_id', String(pulseId)).maybeSingle();
-    if (!project && jobNumber) {
-      const { data: byJobNumber } = await supabase
-        .from('projects').select('*')
-        .eq('job_number', jobNumber).ilike('site_address', `%${siteAddress || ''}%`).maybeSingle();
-      project = byJobNumber;
-    }
+    // Exact Monday item, then SOURCE PROPOSAL ID, then job number + address (exactly one match only).
+    const match = await findProjectForMondayItem({ pulseId, sourceProposalId: cols[COL.sourceProposal], jobNumber, siteAddress });
+    const project = match.project;
     if (!project) {
-      console.error(`contractor-assigned: no project found for job ${jobNumber}`);
-      await addMondayNote(pulseId, `⚠️ Xpress Draft Portal: Could not match this item to a portal project (job "${jobNumber}") when linking the contractor. Please check manually.`);
+      const several = match.reason === 'several';
+      console.error(`contractor-assigned: ${several ? 'several projects match' : 'no project found for'} job ${jobNumber}`);
+      await addMondayNote(pulseId, `⚠️ Xpress Draft Portal: ${several ? 'Several portal projects match' : 'No portal project matches'} job "${jobNumber}" and this site address, so the contractor was NOT linked. Please check manually.`);
+      await alertOnce(`assign:${pulseId}`, `⚠️ Contractor NOT linked for ${jobNumber}: ${several ? 'several portal projects match' : 'no portal project matches'}. See the note on the Monday item.`);
       return res.json({ ok: true });
     }
 
