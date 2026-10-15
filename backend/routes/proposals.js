@@ -5,6 +5,7 @@ const { Resend } = require('resend');
 const crypto = require('crypto');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendClientSms } = require('../utils/sms');
+const { addressesMatch } = require('../utils/projectMatch');
 const PROPOSALS_BOARD_ID = '18389820785';
 const STARTED_PROJECTS_GROUP = 'group_mky4ey72';
 const CONTRACTOR_COL_PROPOSALS = 'board_relation_mky4v9kn';
@@ -28,7 +29,7 @@ async function mondayApi(query) {
   return res.json();
 }
 async function addMondayNote(itemId, note) {
-  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: "${note}") { id } }`);
+  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: ${JSON.stringify(note)}) { id } }`);
 }
 async function getProposalItem(itemId) {
   const data = await mondayApi(`{
@@ -136,13 +137,22 @@ router.post('/webhook', async (req, res) => {
       await supabase.from('users').update({ phone: clientPhone }).eq('id', user.id);
       user.phone = clientPhone;
     }
-    // Find or create portal project
+    // Find THIS proposal's project. The proposal item's own ID is the one key that is never
+    // shared between clients (job numbers can be), so it comes first.
     let { data: project } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('job_number', jobNumber)
-      .ilike('site_address', `%${siteAddress}%`)
-      .single();
+      .from('projects').select('*').eq('source_proposal_id', String(pulseId)).maybeSingle();
+    if (!project) {
+      // Projects made before SOURCE PROPOSAL ID existed: adopt one ONLY when it is clearly the
+      // SAME client's project at the SAME address. Never take over another client's project.
+      const { data: sameJob } = await supabase
+        .from('projects').select('*').eq('job_number', jobNumber).eq('client_id', user.id).is('source_proposal_id', null);
+      const adoptable = (sameJob || []).filter(pr => addressesMatch(pr.site_address, siteAddress));
+      if (adoptable.length === 1) {
+        project = adoptable[0];
+        await supabase.from('projects').update({ source_proposal_id: String(pulseId) }).eq('id', project.id);
+        console.log('Adopted existing project for this client and address:', project.id);
+      }
+    }
     if (!project) {
       const { data: newProject } = await supabase
         .from('projects')
@@ -150,6 +160,7 @@ router.post('/webhook', async (req, res) => {
           name: clientName,
           job_number: jobNumber,
           site_address: siteAddress,
+          source_proposal_id: String(pulseId),
           stage: 'preliminary',
           client_id: user.id,
           contractor_id: contractorId,
@@ -165,7 +176,6 @@ router.post('/webhook', async (req, res) => {
         is_working_partner: contractorId !== null
       }).eq('id', project.id);
     }
-    // Create contractor job offer if contractor assigned
     if (contractorId && project) {
       try {
         const { data: existingJob } = await supabase
