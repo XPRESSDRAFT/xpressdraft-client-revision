@@ -146,7 +146,7 @@ router.get('/jobs', auth, async (req, res) => {
 
     const { data: jobs } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at)`)
       .eq('contractor_id', req.user.id)
       .order('created_at', { ascending: false });
 
@@ -158,7 +158,9 @@ router.get('/jobs', auth, async (req, res) => {
       const dollarFee = mondayStatus ? Math.round((mondayStatus.dealValue * (j.total_fee || 0)) / 100) : 0;
       const hasNewInstructions = !!(j.project?.last_instructions_at &&
         (!j.instructions_viewed_at || new Date(j.project.last_instructions_at) > new Date(j.instructions_viewed_at)));
-      return { ...j, mondayStatus, dollarFee, hasNewInstructions };
+      const hasClientApproved = !!(j.project?.client_approved_at &&
+        (!j.approval_viewed_at || new Date(j.project.client_approved_at) > new Date(j.approval_viewed_at)));
+      return { ...j, mondayStatus, dollarFee, hasNewInstructions, hasClientApproved };
     });
 
     res.json({ jobs: enriched });
@@ -176,12 +178,18 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
 
     const { data: job } = await supabase
       .from('contractor_jobs')
-      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at)`)
+      .select(`*, project:projects(id, name, job_number, site_address, stage, monday_item_id, client_id, last_instructions_at, client_approved_at)`)
       .eq('id', req.params.jobId)
       .eq('contractor_id', req.user.id)
       .single();
 
     if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    // Opening the job counts as having seen the approval news — this is a
+    // dashboard-level notification, not tucked into a specific tab.
+    if (job.project?.client_approved_at && (!job.approval_viewed_at || new Date(job.project.client_approved_at) > new Date(job.approval_viewed_at))) {
+      await supabase.from('contractor_jobs').update({ approval_viewed_at: new Date().toISOString() }).eq('id', job.id);
+    }
 
     let proposalDetails = null;
     let mondayStatus = null;
@@ -210,7 +218,8 @@ router.get('/jobs/:jobId/details', auth, async (req, res) => {
       .eq('contractor_job_id', job.id).eq('status', 'pending');
     const pendingFeeRequestOptions = (pendingRequests || []).map(r => r.option_key);
 
-    res.json({ job, proposalDetails, client, mondayStatus, dollarFee, pendingFeeRequestOptions });
+    const hasClientApproved = !!job.project?.client_approved_at;
+    res.json({ job, proposalDetails, client, mondayStatus, dollarFee, pendingFeeRequestOptions, hasClientApproved });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -242,7 +251,17 @@ router.get('/jobs/:jobId/instructions', auth, async (req, res) => {
 // Update fee selections
 const STAGE_OPTIONS = ['PR - STAGE', 'WD - STAGE'];
 const REVISION_OPTIONS = ['FIRST DRAFT', ...'ABCDEFGHIJKLMN'.split('').map(l => `ISSUE - ${l}`)];
-const TIMELINE_OPTIONS = ['STARTED', 'PROJECT OVERVIEW', '3D MODEL', 'DESIGN', '25%', '50%', '75%', 'FINAL REVISION', 'AWAITING CLIENT'];
+// Timeline labels on Monday, by index (Overall Projects color_mky440wt).
+// Index 5 no longer has a label, and AWAITING CLIENT exists twice (13 and
+// 17). So Timeline is always WRITTEN by index, never by label text, which
+// stops Monday picking the duplicate. Both 13 and 17 read back as the
+// text "AWAITING CLIENT".
+const TIMELINE_INDEX = {
+  'SET TIMELINE': 0, 'DESIGN': 1, 'UNDER ASSISTANCE': 2, 'PROJECT OVERVIEW': 3, '3D MODEL': 4,
+  'FIRST DRAFT': 6, 'FINAL DRAWINGS': 7, '25%': 8, '50%': 9, '75%': 10, 'FINAL REVISION': 11,
+  'MEETING REQUIRED': 12, 'AWAITING CLIENT': 13, 'TO START': 14, 'STARTED': 15, 'READY TO DELIVER': 16, 'SUBMITTED': 18,
+};
+const TIMELINE_OPTIONS = Object.keys(TIMELINE_INDEX);
 const STATUS_FIELD = {
   stage: { column: 'color_mky4a52f', options: STAGE_OPTIONS },
   revision: { column: 'color_mky4x01c', options: REVISION_OPTIONS },
@@ -266,7 +285,9 @@ router.put('/jobs/:jobId/status', auth, async (req, res) => {
       .eq('id', req.params.jobId).eq('contractor_id', req.user.id).single();
     if (!job || !job.project?.monday_item_id) return res.status(404).json({ error: 'Job or Monday link not found' });
 
-    await mondayApi(`mutation { change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${job.project.monday_item_id}, column_id: "${config.column}", value: "{\\"label\\":\\"${value}\\"}") { id } }`);
+    const statusValue = field === 'timeline' ? { index: TIMELINE_INDEX[value] } : { label: value };
+    const result = await mondayApi(`mutation { change_column_value(board_id: ${OVERALL_BOARD_ID}, item_id: ${job.project.monday_item_id}, column_id: "${config.column}", value: ${JSON.stringify(JSON.stringify(statusValue))}) { id } }`);
+    if (result?.errors?.length) return res.status(502).json({ error: 'Monday did not accept that change: ' + (result.errors[0].message || 'unknown error') });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
