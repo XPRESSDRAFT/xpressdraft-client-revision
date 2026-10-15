@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
+const { findMondayItemForProject, alertOnce } = require('../utils/projectMatch');
 const { auth, teamOnly } = require('../middleware/auth');
 
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
@@ -12,25 +13,6 @@ async function mondayApi(query) {
   });
   return res.json();
 }
-// Finds the Overall Projects board item matching a job number, so a
-// legacy project (created before this portal existed, or manually via
-// "+ New project") can self-link to Monday the moment it actually needs
-// to — e.g. when a contractor gets assigned and needs Deal Value.
-async function findMondayItemIdByJobNumber(jobNumber) {
-  if (!jobNumber) return null;
-  try {
-    const data = await mondayApi(`{
-      boards(ids: [${OVERALL_BOARD_ID}]) {
-        items_page(query_params: {rules: [{column_id: "text_mm06wmkq", compare_value: ["${jobNumber}"], operator: any_of}]}) {
-          items { id }
-        }
-      }
-    }`);
-    const items = data?.data?.boards?.[0]?.items_page?.items || [];
-    return items[0]?.id || null;
-  } catch (e) { console.error('findMondayItemIdByJobNumber error:', e.message); return null; }
-}
-
 router.get('/', auth, async (req, res) => {
   try {
     let query = supabase
@@ -220,11 +202,14 @@ router.put('/:id', auth, async (req, res) => {
       // Legacy/manually-created projects may have no Monday link at all
       // (never went through the Proposals webhook) — self-heal that now,
       // since the contractor needs Deal Value and other Monday data.
-      if (!data.monday_item_id && data.job_number) {
-        const foundItemId = await findMondayItemIdByJobNumber(data.job_number);
-        if (foundItemId) {
-          await supabase.from('projects').update({ monday_item_id: String(foundItemId) }).eq('id', req.params.id);
-          data.monday_item_id = String(foundItemId);
+      if (!data.monday_item_id) {
+        // SOURCE PROPOSAL ID first, then job number + address with exactly one match.
+        const found = await findMondayItemForProject(data);
+        if (found.itemId) {
+          await supabase.from('projects').update({ monday_item_id: String(found.itemId) }).eq('id', req.params.id);
+          data.monday_item_id = String(found.itemId);
+        } else {
+          await alertOnce(`link:${req.params.id}`, `⚠️ Could not link ${data.job_number || 'a project'} to its Monday item (${found.reason}). Link it by hand if the contractor needs its Monday details.`);
         }
       }
     }
