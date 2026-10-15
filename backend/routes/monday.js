@@ -59,7 +59,12 @@ async function updateMondayStatus(itemId, boardId, columnId, value) {
   await mondayApi(`mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${columnId}", value: "{\\"label\\":\\"${value}\\"}") { id } }`);
 }
 async function addMondayNote(itemId, boardId, note) {
-  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: "${note}") { id } }`);
+  await mondayApi(`mutation { create_update(item_id: ${itemId}, body: ${JSON.stringify(note)}) { id } }`);
+}
+// Timeline is written by INDEX, never label text: AWAITING CLIENT exists
+// twice on the column (13 and 17), so a label write could hit the wrong one.
+async function setTimelineIndex(itemId, boardId, index) {
+  await mondayApi(`mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "color_mky440wt", value: ${JSON.stringify(JSON.stringify({ index }))}) { id } }`);
 }
 async function sendEmail(to, subject, html, attachments = []) {
   const payload = { from: 'Xpress Draft <noreply@xpressdraft.com.au>', to, subject, html };
@@ -357,9 +362,11 @@ router.post('/webhook', async (req, res) => {
       variation_link: paymentLink || null,
       sent_to: clientEmail
     });
-    if (!paymentLink) {
-      await updateMondayStatus(pulseId, boardId, COL.deliveryStatus, 'UNDER REVIEW');
-    }
+    // Stamp the delivery. Nothing else changes on Monday here: DELIVERY STATUS stays READY TO DELIVER
+    // until the client opens a drawing. At that moment (utils/clientAccess.js) it becomes UNDER REVIEW,
+    // the Timeline becomes AWAITING CLIENT and the item moves to the AWAITING CLIENT group, so the
+    // team can tell at a glance whether the client has looked yet.
+    await supabase.from('projects').update({ delivered_at: new Date().toISOString() }).eq('id', project.id);
     console.log(`Delivery sent: ${deliveryType} to ${clientEmail}`);
     res.json({ ok: true, deliveryType });
   } catch (err) {
@@ -431,9 +438,7 @@ router.post('/stripe-webhook', async (req, res) => {
     );
     if (project.monday_item_id) {
       await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'PAID');
-      setTimeout(async () => {
-        await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'UNDER REVIEW');
-      }, 3000);
+      // PAID stays until the client actually opens the project, then it becomes UNDER REVIEW.
     }
     console.log(`Portal access sent after payment to ${clientEmail}`);
     res.json({ received: true });
@@ -490,6 +495,8 @@ router.post('/approve', auth, async (req, res) => {
           value: "{\\"label\\":\\"PR APPROVED\\"}"
         ) { id }
       }`);
+      // Timeline rule: the client approving and proceeding sets PROJECT OVERVIEW (index 3).
+      await setTimelineIndex(project.monday_item_id, process.env.MONDAY_BOARD_ID, 3);
     }
     console.log(`Approval sent for ${jobNumber}`);
     res.json({ ok: true });
