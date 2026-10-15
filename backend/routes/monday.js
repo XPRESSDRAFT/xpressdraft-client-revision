@@ -7,6 +7,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 const { auth } = require('../middleware/auth');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendAdminSms, sendClientSms } = require('../utils/sms');
+const { findProjectForMondayItem, alertOnce } = require('../utils/projectMatch');
 const { isLargeFile, uploadToR2 } = require('../utils/r2Storage');
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
@@ -18,6 +19,7 @@ const COL = {
   stage:          'color_mky4a52f',
   siteAddress:    'text_mky7ypsg',
   jobNumber:      'text_mm06wmkq',
+  sourceProposal: 'text_mm83tq9f',
 };
 const APPROVAL_NOTE = `<p style="color:#5E635B;font-size:13px;line-height:1.6;margin-top:24px;padding:16px;background:#F3EAE5;border-radius:8px;border-left:3px solid #EA672F;">
   <strong>Happy with the drawings?</strong> Please send a confirmation email to
@@ -191,14 +193,20 @@ router.post('/webhook', async (req, res) => {
     const isWD = stageLabel.includes('WD');
     const isFirstIssue = revisionLabel.includes('FIRST DRAFT') || revisionLabel === 'ISSUE - A' || revisionLabel === 'ISSUE-A' || revisionLabel === 'ISSUE A';
     console.log(`Job: ${jobNumber}, Stage: ${stageLabel}, Revision: ${revisionLabel}, isWD: ${isWD}, isFirstIssue: ${isFirstIssue}`);
-    const { data: project } = await supabase
-      .from('projects')
-      .select('*, client:users!projects_client_id_fkey(id, name, email, phone)')
-      .eq('job_number', jobNumber)
-      .single();
+    // Job numbers can be shared by two clients, so the project is found by the exact Monday item,
+    // then SOURCE PROPOSAL ID, then job number + address ONLY when exactly one project matches.
+    const match = await findProjectForMondayItem({
+      pulseId, sourceProposalId: cols[COL.sourceProposal], jobNumber: cols[COL.jobNumber], siteAddress,
+      select: '*, client:users!projects_client_id_fkey(id, name, email, phone)'
+    });
+    const project = match.project;
     if (!project) {
-      console.error(`No project found for job: ${jobNumber}`);
-      await addMondayNote(pulseId, boardId, `⚠️ Xpress Draft Portal: No project found for job number "${jobNumber}". Check that the Job Number column matches the portal exactly.`);
+      const several = match.reason === 'several';
+      console.error(`Delivery: ${several ? 'several projects match' : 'no project matches'} job ${jobNumber}`);
+      await addMondayNote(pulseId, boardId, several
+        ? `⚠️ Xpress Draft Portal: Several portal projects match job number "${jobNumber}" and this site address, so nothing was delivered. Please check the portal for duplicate projects.`
+        : `⚠️ Xpress Draft Portal: No portal project matches job number "${jobNumber}" and this site address, so nothing was delivered. Check the Job Number and Site Address on this item, and that the project exists in the portal.`);
+      await alertOnce(`delivery:${pulseId}`, `⚠️ Delivery NOT sent for ${jobNumber}: ${several ? 'several portal projects match' : 'no portal project matches'}. See the note on the Monday item.`);
       return res.json({ ok: true });
     }
     if (!project.client) {
