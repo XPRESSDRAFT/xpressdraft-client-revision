@@ -8,6 +8,7 @@ const { auth } = require('../middleware/auth');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const { sendAdminSms, sendClientSms } = require('../utils/sms');
 const { findProjectForMondayItem, alertOnce } = require('../utils/projectMatch');
+const { recordMoneyIn } = require('../utils/moneyIn');
 const { isLargeFile, uploadToR2 } = require('../utils/r2Storage');
 const COL = {
   deliveryStatus: 'color_mm64ffyg',
@@ -398,6 +399,11 @@ router.post('/stripe-webhook', async (req, res) => {
       return res.json({ received: true });
     }
     const session = event.data.object;
+    // Stripe can send the same event more than once. A payment already processed is acknowledged and
+    // ignored, so it can't send a second email or write a second Money In row.
+    const processedId = session.payment_intent || session.id;
+    const { data: alreadyProcessed } = await supabase.from('stripe_payments').select('payment_id').eq('payment_id', processedId).maybeSingle();
+    if (alreadyProcessed) { console.log('Stripe payment already processed:', processedId); return res.json({ received: true }); }
     const paymentLinkId = session.payment_link;
     console.log('Payment link ID:', paymentLinkId);
     if (!paymentLinkId) {
@@ -448,6 +454,8 @@ router.post('/stripe-webhook', async (req, res) => {
       await updateMondayStatus(project.monday_item_id, process.env.MONDAY_BOARD_ID, COL.deliveryStatus, 'PAID');
       // PAID stays until the client actually opens the project, then it becomes UNDER REVIEW.
     }
+    // One Money In row per confirmed payment (never throws; texts the owner if it can't write it).
+    await recordMoneyIn({ project, clientName, session, paymentLink });
     console.log(`Portal access sent after payment to ${clientEmail}`);
     res.json({ received: true });
   } catch (err) {
