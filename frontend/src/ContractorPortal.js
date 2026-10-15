@@ -72,7 +72,7 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
               {["FIRST DRAFT",..."ABCDEFGHIJKLMN".split("").map(l=>"ISSUE - "+l)].map(v=><option key={v} value={v}>{v}</option>)}
             </select>
             <select value={effectiveMs.timeline} onChange={e=>updateStatusField("timeline",e.target.value)} style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"#EBF3FE",color:"#1A4A8A",fontWeight:600,border:"1px solid #C5DCF5"}}>
-              {["STARTED","PROJECT OVERVIEW","3D MODEL","DESIGN","25%","50%","75%","FINAL REVISION","AWAITING CLIENT"].map(v=><option key={v} value={v}>{v}</option>)}
+              {["SET TIMELINE","DESIGN","UNDER ASSISTANCE","PROJECT OVERVIEW","3D MODEL","FIRST DRAFT","FINAL DRAWINGS","25%","50%","75%","FINAL REVISION","MEETING REQUIRED","AWAITING CLIENT","TO START","STARTED","READY TO DELIVER","SUBMITTED"].map(v=><option key={v} value={v}>{v}</option>)}
             </select>
             {statusSaving&&<span style={{fontSize:11,color:B.black2}}>Saving...</span>}
           </div>
@@ -176,6 +176,11 @@ function JobDetail({job,jobDetails,fees,totalFee,detailsLoading,onBack,onLogout,
               </div>
               );
             })()}
+            {jobDetails?.hasClientApproved&&(
+              <div style={{background:"#2E5C10",borderRadius:10,padding:"1rem 1.25rem",marginBottom:16,textAlign:"center"}}>
+                <p style={{fontSize:14,color:"#fff",fontWeight:700,margin:0}}>✓ Client has approved these drawings</p>
+              </div>
+            )}
             {job.status==="accepted"&&(
               <div style={{background:"#EAF3DE",border:"1px solid #639922",borderRadius:10,padding:"1.25rem",marginBottom:16,textAlign:"center"}}>
                 <p style={{fontSize:14,color:"#2E5C10",fontWeight:600,margin:0}}>Job accepted at {job.total_fee}% fee (${(jobDetails?.dollarFee||0).toLocaleString()})</p>
@@ -234,6 +239,7 @@ function ContractorPortal({user,onLogout}){
     setJobDetails(d);
     setFees({siteVisit:job.site_visit||false,model3d:job.model_3d||false,renders3d:job.renders_3d||false});
     setTotalFee(job.total_fee||25);
+    setJobs(prev=>prev.map(j=>j.id===job.id?{...j,hasClientApproved:false}:j));
     setDetailsLoading(false);
   };
 
@@ -308,6 +314,7 @@ function ContractorPortal({user,onLogout}){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
                   {j.project?.job_number&&<span style={{fontSize:12,padding:"2px 8px",borderRadius:20,background:"#444",color:B.cream,fontWeight:600,marginRight:8}}>{j.project.job_number}</span>}
+                  {j.hasClientApproved&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:"#2E5C10",color:B.white,fontWeight:700,marginRight:8}}>APPROVED</span>}
                   {j.hasNewInstructions&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:B.orange,color:B.white,fontWeight:700,marginRight:8}}>NEW MARKUP</span>}
                   <span style={{fontWeight:600,fontSize:15,color:B.black}}>{j.project?.site_address||j.project?.name}</span>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
