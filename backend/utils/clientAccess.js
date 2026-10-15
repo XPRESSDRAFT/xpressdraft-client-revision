@@ -2,9 +2,7 @@ const { supabase } = require('../db');
 
 const BOARD_ID = process.env.MONDAY_BOARD_ID;
 const DELIVERY_STATUS_COL = 'color_mm64ffyg';
-const TIMELINE_COL = 'color_mky440wt';
 const AWAITING_CLIENT_GROUP = 'group_mkzqbpx4';
-const TIMELINE_AWAITING_CLIENT = 13; // written by index: the label exists twice on the column
 
 async function mondayApi(query) {
   const res = await fetch('https://api.monday.com/v2', {
@@ -23,7 +21,6 @@ async function run(query) {
 
 // Called when a client opens a drawing. The first open after each delivery:
 //   - DELIVERY STATUS  READY TO DELIVER / PAID  ->  UNDER REVIEW
-//   - Timeline                                  ->  AWAITING CLIENT
 //   - item moves to the AWAITING CLIENT group
 // Until then none of that happens, which is how the team can see at a
 // glance that the client hasn't looked yet. Later opens do nothing.
@@ -48,7 +45,6 @@ async function recordClientAccess(projectId, clientId) {
     if (/ready to deliver|paid/i.test(status)) {
       await run(`mutation { change_column_value(board_id: ${BOARD_ID}, item_id: ${p.monday_item_id}, column_id: "${DELIVERY_STATUS_COL}", value: ${JSON.stringify(JSON.stringify({ label: 'UNDER REVIEW' }))}) { id } }`);
     }
-    await run(`mutation { change_column_value(board_id: ${BOARD_ID}, item_id: ${p.monday_item_id}, column_id: "${TIMELINE_COL}", value: ${JSON.stringify(JSON.stringify({ index: TIMELINE_AWAITING_CLIENT }))}) { id } }`);
     await run(`mutation { move_item_to_group(item_id: ${p.monday_item_id}, group_id: "${AWAITING_CLIENT_GROUP}") { id } }`);
   } catch (e) {
     console.error('recordClientAccess failed, will retry on the next open:', e.message);
