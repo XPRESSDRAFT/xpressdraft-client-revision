@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
 const { findMondayItemForProject, alertOnce } = require('../utils/projectMatch');
+const { attachClientStages } = require('../utils/clientStage');
 const { auth, teamOnly } = require('../middleware/auth');
 
 const OVERALL_BOARD_ID = process.env.MONDAY_BOARD_ID;
@@ -38,6 +39,8 @@ router.get('/', auth, async (req, res) => {
       revisionSummary: buildRevisionSummary(p.stage, p.revisions || [], p.no_free_revisions)
     }));
 
+    // Admin and team also see each client's stage (PROSPECT / CLIENT / INACTIVE) from Monday.
+    if (req.user.role === 'admin' || req.user.role === 'team') await attachClientStages(projects);
     res.json({ projects });
   } catch (err) {
     console.error('List projects error:', err);
